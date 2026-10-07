@@ -1,0 +1,32 @@
+import fs from "node:fs";
+import path from "node:path";
+import Database from "better-sqlite3";
+import { config } from "../config/env.js";
+
+fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
+
+export const db = new Database(config.dbPath);
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS installations (
+  id TEXT PRIMARY KEY,
+  slug TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  repo_url TEXT NOT NULL,
+  git_ref TEXT,
+  status TEXT NOT NULL,
+  status_detail TEXT,
+  image_tag TEXT,
+  container_id TEXT,
+  container_name TEXT NOT NULL,
+  internal_port INTEGER NOT NULL DEFAULT 8080,
+  http_path TEXT NOT NULL DEFAULT '/mcp',
+  port_env_var TEXT NOT NULL DEFAULT 'PORT',
+  host_env_var TEXT NOT NULL DEFAULT 'HOST',
+  bearer_token_encrypted TEXT,
+  env_json_encrypted TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`);

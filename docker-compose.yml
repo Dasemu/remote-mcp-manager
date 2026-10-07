@@ -1,0 +1,24 @@
+services:
+  manager:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      PORT: 3000
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      MCP_NETWORK_NAME: mcp-net
+      DATA_DIR: /repo/data
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      MASTER_KEY: ${MASTER_KEY}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/repo/data
+    networks:
+      - mcp-net
+
+networks:
+  mcp-net:
+    name: mcp-net

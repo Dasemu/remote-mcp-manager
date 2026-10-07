@@ -1,6 +1,7 @@
+import net from "node:net";
 import Docker from "dockerode";
 import { config } from "../config/env.js";
-import type { Installation } from "../installations.js";
+import type { Installation } from "../db/installations.js";
 
 const docker = new Docker({ socketPath: config.dockerSocketPath });
 
@@ -11,15 +12,19 @@ export async function ensureNetwork(name: string): Promise<void> {
   }
 }
 
-export async function runInstallationContainer(installation: Installation): Promise<void> {
-  await ensureNetwork(config.mcpNetworkName);
-
-  const existing = docker.getContainer(installation.containerName);
+export async function removeContainerIfExists(containerName: string): Promise<void> {
   try {
-    await existing.remove({ force: true });
+    await docker.getContainer(containerName).remove({ force: true });
   } catch {
-    // container didn't exist yet, nothing to clean up
+    // didn't exist, nothing to clean up
   }
+}
+
+export async function runInstallationContainer(installation: Installation): Promise<string> {
+  if (!installation.imageTag) throw new Error("installation has no built image yet");
+
+  await ensureNetwork(config.mcpNetworkName);
+  await removeContainerIfExists(installation.containerName);
 
   const env = {
     ...installation.env,
@@ -38,6 +43,11 @@ export async function runInstallationContainer(installation: Installation): Prom
   });
 
   await container.start();
+  return container.id;
+}
+
+export async function stopInstallationContainer(containerName: string): Promise<void> {
+  await removeContainerIfExists(containerName);
 }
 
 export async function getContainerIp(containerName: string): Promise<string> {
@@ -48,4 +58,36 @@ export async function getContainerIp(containerName: string): Promise<string> {
     throw new Error(`Container ${containerName} has no IP on network ${config.mcpNetworkName}`);
   }
   return network.IPAddress;
+}
+
+export async function waitForContainerHealth(
+  installation: Installation,
+  timeoutMs = 20_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: Error | undefined;
+
+  while (Date.now() < deadline) {
+    try {
+      const ip = await getContainerIp(installation.containerName);
+      await new Promise<void>((resolve, reject) => {
+        const socket = net.createConnection({ host: ip, port: installation.internalPort, timeout: 1000 });
+        socket.once("connect", () => {
+          socket.end();
+          resolve();
+        });
+        socket.once("error", reject);
+        socket.once("timeout", () => reject(new Error("connect timeout")));
+      });
+      return;
+    } catch (err) {
+      lastError = err as Error;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
+  throw new Error(
+    `container did not start listening on ${installation.portEnvVar}=${installation.internalPort} within ${timeoutMs}ms` +
+      (lastError ? ` (last error: ${lastError.message})` : ""),
+  );
 }
