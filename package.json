@@ -1,0 +1,10 @@
+{
+  "name": "remote-mcp-manager",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace apps/server"
+  }
+}
