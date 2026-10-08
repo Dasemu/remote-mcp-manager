@@ -2,6 +2,18 @@
 
 Recurring mistakes and gotchas found while building and operating this project, and how to avoid or work around them.
 
+## A pinned external image's *contents* can still change
+
+The Dockerfile pinned `ghcr.io/railwayapp/nixpacks:1.41.0` and copied `/usr/bin/nixpacks` out
+of it. That path existed when the plan was written but was gone by the time of the first
+real production deploy — the image got repurposed upstream (now ships a Nix daemon, not the
+nixpacks CLI) even though the tag `1.41.0` still resolves.
+
+**Avoid it:** pinning a tag is not enough to guarantee what's inside an externally-published
+image stays the same — only pinning by digest guarantees bytes. For a single binary like this,
+prefer downloading the pinned release asset directly from the project's GitHub releases (a
+specific `vX.Y.Z` tag + exact filename) over extracting it from someone else's Docker image.
+
 ## Nixpacks silently picks its own default runtime version
 
 Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).
