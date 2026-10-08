@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import httpProxy from "http-proxy";
-import { getInstallationBySlug } from "../db/installations.js";
+import { getInstallationBySlug, type Installation } from "../db/installations.js";
 import { getContainerIp } from "../docker/containers.js";
 
 const proxy = httpProxy.createProxyServer();
@@ -11,11 +11,31 @@ proxy.on("error", (err, _req, res) => {
   }
 });
 
-function tokensMatch(expected: string, provided: string): boolean {
+function stringsMatch(expected: string, provided: string): boolean {
   const a = Buffer.from(expected);
   const b = Buffer.from(provided);
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
+}
+
+export function isAuthorized(installation: Installation, authHeader: string): boolean {
+  if (authHeader.startsWith("Bearer ")) {
+    const provided = authHeader.slice(7);
+    return Boolean(installation.bearerToken) && stringsMatch(installation.bearerToken!, provided);
+  }
+
+  // Optional, per-installation: lets a client still using Basic Auth against the old nginx
+  // setup keep its credentials instead of switching to a bearer token right away.
+  if (authHeader.startsWith("Basic ") && installation.basicAuthUsername && installation.basicAuthPassword) {
+    const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
+    const separatorIndex = decoded.indexOf(":");
+    if (separatorIndex === -1) return false;
+    const user = decoded.slice(0, separatorIndex);
+    const pass = decoded.slice(separatorIndex + 1);
+    return stringsMatch(installation.basicAuthUsername, user) && stringsMatch(installation.basicAuthPassword, pass);
+  }
+
+  return false;
 }
 
 export async function handleMcpProxyRequest(req: Request, res: Response): Promise<void> {
@@ -26,9 +46,7 @@ export async function handleMcpProxyRequest(req: Request, res: Response): Promis
     return;
   }
 
-  const authHeader = req.get("authorization") ?? "";
-  const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  if (!provided || !tokensMatch(installation.bearerToken, provided)) {
+  if (!isAuthorized(installation, req.get("authorization") ?? "")) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }

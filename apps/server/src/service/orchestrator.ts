@@ -53,6 +53,8 @@ export function configureInstallation(
     hostEnvVar?: string;
     httpPath?: string;
     internalPort?: number;
+    basicAuthUsername?: string | null;
+    basicAuthPassword?: string | null;
   },
 ): Installation {
   return updateInstallation(id, patch);

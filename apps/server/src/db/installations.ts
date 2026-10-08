@@ -29,6 +29,8 @@ export interface Installation {
   hostEnvVar: string;
   env: Record<string, string>;
   bearerToken: string | null;
+  basicAuthUsername: string | null;
+  basicAuthPassword: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,6 +52,8 @@ interface Row {
   host_env_var: string;
   bearer_token_encrypted: string | null;
   env_json_encrypted: string | null;
+  basic_auth_username: string | null;
+  basic_auth_password_encrypted: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +76,8 @@ function rowToInstallation(row: Row): Installation {
     hostEnvVar: row.host_env_var,
     env: row.env_json_encrypted ? JSON.parse(decryptSecret(row.env_json_encrypted)) : {},
     bearerToken: row.bearer_token_encrypted ? decryptSecret(row.bearer_token_encrypted) : null,
+    basicAuthUsername: row.basic_auth_username,
+    basicAuthPassword: row.basic_auth_password_encrypted ? decryptSecret(row.basic_auth_password_encrypted) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -132,6 +138,8 @@ export interface InstallationUpdate {
   hostEnvVar?: string;
   env?: Record<string, string>;
   bearerToken?: string | null;
+  basicAuthUsername?: string | null;
+  basicAuthPassword?: string | null;
   gitRef?: string | null;
 }
 
@@ -150,6 +158,10 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
     hostEnvVar: patch.hostEnvVar ?? current.hostEnvVar,
     env: patch.env ?? current.env,
     bearerToken: patch.bearerToken !== undefined ? patch.bearerToken : current.bearerToken,
+    basicAuthUsername:
+      patch.basicAuthUsername !== undefined ? patch.basicAuthUsername : current.basicAuthUsername,
+    basicAuthPassword:
+      patch.basicAuthPassword !== undefined ? patch.basicAuthPassword : current.basicAuthPassword,
     gitRef: patch.gitRef !== undefined ? patch.gitRef : current.gitRef,
   };
 
@@ -165,6 +177,8 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
       host_env_var = @hostEnvVar,
       env_json_encrypted = @envJsonEncrypted,
       bearer_token_encrypted = @bearerTokenEncrypted,
+      basic_auth_username = @basicAuthUsername,
+      basic_auth_password_encrypted = @basicAuthPasswordEncrypted,
       git_ref = @gitRef,
       updated_at = @updatedAt
      WHERE id = @id`,
@@ -180,6 +194,8 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
     hostEnvVar: next.hostEnvVar,
     envJsonEncrypted: encryptSecret(JSON.stringify(next.env)),
     bearerTokenEncrypted: next.bearerToken ? encryptSecret(next.bearerToken) : null,
+    basicAuthUsername: next.basicAuthUsername,
+    basicAuthPasswordEncrypted: next.basicAuthPassword ? encryptSecret(next.basicAuthPassword) : null,
     gitRef: next.gitRef,
     updatedAt: new Date().toISOString(),
   });

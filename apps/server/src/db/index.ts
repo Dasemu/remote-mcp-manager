@@ -30,3 +30,16 @@ CREATE TABLE IF NOT EXISTS installations (
   updated_at TEXT NOT NULL
 );
 `);
+
+// Added after the initial release — ALTER TABLE has no "ADD COLUMN IF NOT EXISTS" in SQLite,
+// so just ignore the "duplicate column" error on a DB that already has it.
+for (const ddl of [
+  "ALTER TABLE installations ADD COLUMN basic_auth_username TEXT",
+  "ALTER TABLE installations ADD COLUMN basic_auth_password_encrypted TEXT",
+]) {
+  try {
+    db.exec(ddl);
+  } catch (err) {
+    if (!(err as Error).message.includes("duplicate column")) throw err;
+  }
+}
