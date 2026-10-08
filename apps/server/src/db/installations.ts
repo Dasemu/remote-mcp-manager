@@ -12,6 +12,11 @@ export type InstallationStatus =
   | "stopped"
   | "error";
 
+export interface HostVolume {
+  hostPath: string;
+  containerPath: string;
+}
+
 export interface Installation {
   id: string;
   slug: string;
@@ -33,6 +38,7 @@ export interface Installation {
   basicAuthPassword: string | null;
   startCommand: string | null;
   publishHostPort: number | null;
+  hostVolumes: HostVolume[];
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +64,7 @@ interface Row {
   basic_auth_password_encrypted: string | null;
   start_command: string | null;
   publish_host_port: number | null;
+  host_volumes_json: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +91,7 @@ function rowToInstallation(row: Row): Installation {
     basicAuthPassword: row.basic_auth_password_encrypted ? decryptSecret(row.basic_auth_password_encrypted) : null,
     startCommand: row.start_command,
     publishHostPort: row.publish_host_port,
+    hostVolumes: row.host_volumes_json ? JSON.parse(row.host_volumes_json) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -148,6 +156,7 @@ export interface InstallationUpdate {
   basicAuthPassword?: string | null;
   startCommand?: string | null;
   publishHostPort?: number | null;
+  hostVolumes?: HostVolume[];
   gitRef?: string | null;
 }
 
@@ -172,6 +181,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
       patch.basicAuthPassword !== undefined ? patch.basicAuthPassword : current.basicAuthPassword,
     startCommand: patch.startCommand !== undefined ? patch.startCommand : current.startCommand,
     publishHostPort: patch.publishHostPort !== undefined ? patch.publishHostPort : current.publishHostPort,
+    hostVolumes: patch.hostVolumes !== undefined ? patch.hostVolumes : current.hostVolumes,
     gitRef: patch.gitRef !== undefined ? patch.gitRef : current.gitRef,
   };
 
@@ -191,6 +201,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
       basic_auth_password_encrypted = @basicAuthPasswordEncrypted,
       start_command = @startCommand,
       publish_host_port = @publishHostPort,
+      host_volumes_json = @hostVolumesJson,
       git_ref = @gitRef,
       updated_at = @updatedAt
      WHERE id = @id`,
@@ -210,6 +221,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
     basicAuthPasswordEncrypted: next.basicAuthPassword ? encryptSecret(next.basicAuthPassword) : null,
     startCommand: next.startCommand,
     publishHostPort: next.publishHostPort,
+    hostVolumesJson: JSON.stringify(next.hostVolumes),
     gitRef: next.gitRef,
     updatedAt: new Date().toISOString(),
   });

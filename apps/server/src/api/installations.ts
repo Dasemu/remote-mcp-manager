@@ -68,6 +68,7 @@ installationsRouter.patch("/:id/config", (req, res) => {
     basicAuthPassword,
     startCommand,
     publishHostPort,
+    hostVolumes,
   } = req.body ?? {};
   try {
     const installation = configureInstallation(req.params.id, {
@@ -80,6 +81,7 @@ installationsRouter.patch("/:id/config", (req, res) => {
       basicAuthPassword,
       startCommand,
       publishHostPort,
+      hostVolumes,
     });
     res.json(toPublicJson(installation));
   } catch (err) {

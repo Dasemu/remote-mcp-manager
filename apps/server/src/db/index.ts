@@ -38,6 +38,7 @@ for (const ddl of [
   "ALTER TABLE installations ADD COLUMN basic_auth_password_encrypted TEXT",
   "ALTER TABLE installations ADD COLUMN start_command TEXT",
   "ALTER TABLE installations ADD COLUMN publish_host_port INTEGER",
+  "ALTER TABLE installations ADD COLUMN host_volumes_json TEXT",
 ]) {
   try {
     db.exec(ddl);

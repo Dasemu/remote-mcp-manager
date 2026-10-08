@@ -1,5 +1,6 @@
 import {
   type Installation,
+  type HostVolume,
   createInstallation,
   updateInstallation,
   getInstallationById,
@@ -57,6 +58,7 @@ export function configureInstallation(
     basicAuthPassword?: string | null;
     startCommand?: string | null;
     publishHostPort?: number | null;
+    hostVolumes?: HostVolume[];
   },
 ): Installation {
   return updateInstallation(id, patch);

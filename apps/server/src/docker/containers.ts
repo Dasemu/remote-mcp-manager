@@ -40,6 +40,10 @@ export async function runInstallationContainer(installation: Installation): Prom
     ? { [`${installation.internalPort}/tcp`]: [{ HostIp: "127.0.0.1", HostPort: String(installation.publishHostPort) }] }
     : undefined;
 
+  // Bind-mounts a host directory into the container — for state that must survive rebuilds
+  // and that nothing else manages (e.g. a browser profile with an existing logged-in session).
+  const binds = installation.hostVolumes.map((v) => `${v.hostPath}:${v.containerPath}`);
+
   const container = await docker.createContainer({
     name: installation.containerName,
     Image: installation.imageTag,
@@ -55,6 +59,7 @@ export async function runInstallationContainer(installation: Installation): Prom
       ...(config.containerMemoryMb > 0 ? { Memory: config.containerMemoryMb * 1024 * 1024 } : {}),
       ...(config.containerCpus > 0 ? { NanoCpus: Math.round(config.containerCpus * 1e9) } : {}),
       ...(portBinding ? { PortBindings: portBinding } : {}),
+      ...(binds.length > 0 ? { Binds: binds } : {}),
     },
   });
 
