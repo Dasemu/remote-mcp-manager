@@ -1,5 +1,15 @@
-FROM ghcr.io/railwayapp/nixpacks:1.41.0 AS nixpacks
 FROM docker:27-cli AS dockercli
+
+FROM debian:12-slim AS nixpacks
+# ghcr.io/railwayapp/nixpacks no longer ships the CLI binary in its image (repurposed
+# upstream for something else) — pull the pinned release tarball from GitHub instead.
+ARG NIXPACKS_VERSION=1.41.0
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && curl -fsSL -o /tmp/nixpacks.tar.gz \
+    "https://github.com/railwayapp/nixpacks/releases/download/v${NIXPACKS_VERSION}/nixpacks-v${NIXPACKS_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+  && tar -xzf /tmp/nixpacks.tar.gz -C /usr/bin nixpacks \
+  && rm /tmp/nixpacks.tar.gz
 
 FROM node:20-slim AS build
 WORKDIR /repo
