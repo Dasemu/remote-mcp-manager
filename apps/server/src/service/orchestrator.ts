@@ -8,7 +8,13 @@ import {
 } from "../db/installations.js";
 import { cloneOrUpdateRepo, readEnvExampleKeys, repoDir } from "../build/git.js";
 import { runNixpacksBuild } from "../build/nixpacks.js";
-import { runInstallationContainer, stopInstallationContainer, waitForContainerHealth } from "../docker/containers.js";
+import {
+  runInstallationContainer,
+  stopInstallationContainer,
+  waitForContainerHealth,
+  getImageId,
+  removeImageIfUnused,
+} from "../docker/containers.js";
 import { generateBearerToken } from "../crypto/secrets.js";
 
 export interface DraftResult {
@@ -58,6 +64,8 @@ export async function buildInstallation(id: string): Promise<Installation> {
 
   updateInstallation(id, { status: "building", statusDetail: null });
   const imageTag = `mcpmgr/${installation.slug}:latest`;
+  const previousImageId = installation.imageTag ? await getImageId(installation.imageTag) : undefined;
+
   const result = await runNixpacksBuild(installation.slug, repoDir(installation.slug), imageTag);
 
   if (!result.success) {
@@ -65,6 +73,15 @@ export async function buildInstallation(id: string): Promise<Installation> {
       status: "error",
       statusDetail: `build failed, see log at ${result.logPath}`,
     });
+  }
+
+  // Nixpacks moves the tag to the new image, leaving the previous one dangling — clean it up
+  // so rebuilds don't accumulate untagged images forever.
+  if (previousImageId) {
+    const newImageId = await getImageId(imageTag);
+    if (newImageId && newImageId !== previousImageId) {
+      await removeImageIfUnused(previousImageId);
+    }
   }
 
   return updateInstallation(id, { status: "built", statusDetail: null, imageTag });
@@ -98,4 +115,9 @@ export async function removeInstallationContainer(id: string): Promise<void> {
   const installation = getInstallationById(id);
   if (!installation) return;
   await stopInstallationContainer(installation.containerName);
+
+  if (installation.imageTag) {
+    const imageId = await getImageId(installation.imageTag);
+    if (imageId) await removeImageIfUnused(imageId);
+  }
 }
