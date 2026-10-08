@@ -22,7 +22,12 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      // "auto": secure only if the request actually arrived over HTTPS (checks req.secure,
+      // which respects "trust proxy" + X-Forwarded-Proto). A flat `NODE_ENV === "production"`
+      // check meant the cookie was never stored at all when the admin panel is reached over
+      // plain HTTP (e.g. direct to the container, or behind a proxy that doesn't terminate TLS
+      // for it) — login would silently "succeed" but no session would ever persist.
+      secure: "auto",
       maxAge: 1000 * 60 * 60 * 12,
     },
   }),
