@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git openssh-cli
   && rm -rf /var/lib/apt/lists/*
 COPY --from=nixpacks /usr/bin/nixpacks /usr/local/bin/nixpacks
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
+# nixpacks shells out to `docker build`, which defaults to BuildKit — needs the buildx
+# plugin present or it fails with "BuildKit is enabled but the buildx component is missing".
+COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 
 WORKDIR /repo
 COPY package.json package-lock.json ./

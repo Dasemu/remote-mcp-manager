@@ -22,6 +22,14 @@ specific `vX.Y.Z` tag + exact filename) over extracting it from someone else's D
 repo needs a key with access mounted into the container (`SSH_DIR` in `docker-compose.yml`,
 reusing the host's own deploy key) — confirmed both failures back to back while deploying.
 
+## `docker build` needs the buildx plugin present to use BuildKit
+
+Nixpacks shells out to `docker build`, which defaults to BuildKit. The manager's image only
+copied the bare `docker` CLI binary from `docker:27-cli`, not its buildx plugin, so every
+build failed with "BuildKit is enabled but the buildx component is missing or broken" —
+confirmed on the first real build attempt. Fixed by also copying
+`/usr/local/libexec/docker/cli-plugins/docker-buildx` from the same `docker:27-cli` image.
+
 ## Nixpacks silently picks its own default runtime version
 
 Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).
