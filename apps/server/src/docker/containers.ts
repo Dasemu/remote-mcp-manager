@@ -39,8 +39,12 @@ export async function runInstallationContainer(installation: Installation): Prom
     HostConfig: {
       RestartPolicy: { Name: "unless-stopped" },
       NetworkMode: config.mcpNetworkName,
-      Memory: config.containerMemoryMb * 1024 * 1024,
-      NanoCpus: Math.round(config.containerCpus * 1e9),
+      // 0 disables the cap: some hosts (e.g. an unprivileged, OpenRC-based nested LXC with no
+      // systemd to delegate cgroup controllers) can't enforce per-container memory/CPU limits
+      // at all — `docker run` there fails outright trying to write memory.max. Confirmed on a
+      // real deploy; the outer host's own cap (if any) is the only ceiling in that case.
+      ...(config.containerMemoryMb > 0 ? { Memory: config.containerMemoryMb * 1024 * 1024 } : {}),
+      ...(config.containerCpus > 0 ? { NanoCpus: Math.round(config.containerCpus * 1e9) } : {}),
     },
   });
 

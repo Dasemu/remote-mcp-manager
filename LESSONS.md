@@ -30,6 +30,21 @@ build failed with "BuildKit is enabled but the buildx component is missing or br
 confirmed on the first real build attempt. Fixed by also copying
 `/usr/local/libexec/docker/cli-plugins/docker-buildx` from the same `docker:27-cli` image.
 
+## Per-container memory/CPU cgroup limits need the host to delegate controllers
+
+`docker run --memory=...` fails outright ("error setting cgroup config... memory.max: no
+such file or directory") on a host where `cgroup.subtree_control` isn't populated down to
+where the container's cgroup lives. Confirmed on an unprivileged, OpenRC-based nested LXC
+(Alpine, no systemd) with `nesting=1`: systemd normally does this delegation automatically
+at boot; OpenRC doesn't, so `cgroup.subtree_control` stays empty at the LXC's own root and
+no controller is ever available to nested Docker containers. `CONTAINER_MEMORY_MB`/
+`CONTAINER_CPUS` can both be set to `0` to skip asking for a cap at all — on a host like this
+the outer LXC's own memory limit (if Proxmox/systemd-nspawn/etc. sets one) is the only
+enforced ceiling either way. Properly fixing the delegation means moving every process
+already in the LXC's root cgroup into a leaf scope and then writing the wanted controllers
+to the root's `cgroup.subtree_control` — not done here, since it's a live production LXC and
+restructuring its cgroup tree wasn't something to risk without asking first.
+
 ## Nixpacks silently picks its own default runtime version
 
 Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).
