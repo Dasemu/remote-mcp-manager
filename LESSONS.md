@@ -1,0 +1,45 @@
+# Lessons
+
+Recurring mistakes and gotchas found while building and operating this project, and how to avoid or work around them.
+
+## Nixpacks silently picks its own default runtime version
+
+Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).
+
+**Avoid it:** don't trust a green build as proof the runtime is correct. Check the deployed container's actual runtime version against the repo's declared requirement, or pin it explicitly (`NIXPACKS_NODE_VERSION`, `.nvmrc`, etc.) — not yet automated in V1, tracked as a known gap.
+
+## Nixpacks needs a dependency manifest, and fails cleanly without one
+
+No `requirements.txt`/`pyproject.toml` (Python) or `package.json` (Node) in the installed repo → Nixpacks fails with "Nixpacks was unable to generate a build plan" (exit 1). This is expected and not something the manager works around generically — several of the user's own Python MCPs lack a manifest entirely.
+
+**Avoid it:** always surface the full build log in the UI so this failure is immediately diagnosable; don't try to add generic manifest-inference logic.
+
+## Piped exit codes mask the real command result
+
+Piping a subprocess's output through another command (e.g. `| tee`) loses the original exit code in `$?`. This hid a real nixpacks build failure during manual testing.
+
+**Avoid it:** redirect output straight to a file and check `$?` immediately after the command, don't pipe when the exit code matters.
+
+## Rootless Podman isolates the host network namespace from the container bridge
+
+The host cannot reach a container's bridge-network IP directly under rootless Podman (netavark backend, `"isolate": "true"`). Only another container on the same network can reach it.
+
+**Avoid it:** for local dev, run the manager itself as a container attached to `mcp-net` — this also matches the production topology, where the manager runs as a container too.
+
+## SELinux can deny access to a bind-mounted socket even with matching UID/GID
+
+Got an `EACCES` on the Podman socket despite `--userns=keep-id` lining up UID/GID. Root cause was an SELinux AVC denial in enforcing mode, not a permissions issue.
+
+**Avoid it:** when socket access fails despite correct ownership, check `audit.log`/`ausearch` for AVC denials before chasing permissions further. `--security-opt label=disable` confirms the diagnosis but is not a production fix — use a proper SELinux policy/context instead.
+
+## Podman images must be referenced fully-qualified
+
+A short image name wasn't enough to remove an image via the Docker-compatible socket under Podman — needed the fully-qualified `localhost/...` name.
+
+**Avoid it:** always use the fully-qualified name dockerode/the Docker API returns, don't assume short names round-trip.
+
+## npm workspaces hoist node_modules to the repo root
+
+Mounting only `apps/server` into a test container produced `node_modules not found` — the hoisted root `node_modules` wasn't mounted.
+
+**Avoid it:** mount the whole repo root when testing a workspace package, not just its subdirectory.
