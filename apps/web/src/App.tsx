@@ -15,14 +15,14 @@ export function App() {
   if (authenticated === null) return null;
   if (!authenticated) return <Login onLoggedIn={() => setAuthenticated(true)} />;
 
+  const onLoggedOut = () => setAuthenticated(false);
+
   return (
     <BrowserRouter>
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "sans-serif" }}>
-        <Routes>
-          <Route path="/" element={<InstallationList />} />
-          <Route path="/installations/:id" element={<InstallationDetail />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<InstallationList onLoggedOut={onLoggedOut} />} />
+        <Route path="/installations/:id" element={<InstallationDetail onLoggedOut={onLoggedOut} />} />
+      </Routes>
     </BrowserRouter>
   );
 }

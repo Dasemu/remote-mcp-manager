@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api, type Installation } from "../api/client";
 import { InstallWizard } from "./InstallWizard";
+import { Shell } from "../components/Shell";
+import { StatusBadge } from "../components/StatusBadge";
 
-export function InstallationList() {
-  const [installations, setInstallations] = useState<Installation[]>([]);
+export function InstallationList({ onLoggedOut }: { onLoggedOut: () => void }) {
+  const [installations, setInstallations] = useState<Installation[] | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const navigate = useNavigate();
 
@@ -17,12 +19,15 @@ export function InstallationList() {
   }, []);
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Installations</h1>
-        <button onClick={() => setShowWizard((v) => !v)}>{showWizard ? "Close" : "New installation"}</button>
-      </div>
-
+    <Shell
+      title="Installations"
+      onLoggedOut={onLoggedOut}
+      actions={
+        <button type="button" className="btn btn-primary" onClick={() => setShowWizard(true)}>
+          New installation
+        </button>
+      }
+    >
       {showWizard && (
         <InstallWizard
           onCancel={() => setShowWizard(false)}
@@ -33,29 +38,39 @@ export function InstallationList() {
         />
       )}
 
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th align="left">Name</th>
-            <th align="left">Slug</th>
-            <th align="left">Status</th>
-            <th align="left">Repo</th>
-          </tr>
-        </thead>
-        <tbody>
-          {installations.map((i) => (
-            <tr key={i.id} style={{ borderTop: "1px solid #eee" }}>
-              <td>
-                <Link to={`/installations/${i.id}`}>{i.name}</Link>
-              </td>
-              <td>{i.slug}</td>
-              <td>{i.status}</td>
-              <td>{i.repoUrl}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {installations.length === 0 && !showWizard && <p>No installations yet.</p>}
-    </div>
+      {installations && installations.length === 0 && (
+        <div className="empty-state card">
+          <h2 style={{ fontSize: 15 }}>No installations yet</h2>
+          <p>Add a GitHub repository to clone, build, and deploy it as an MCP server.</p>
+        </div>
+      )}
+
+      {installations && installations.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Slug</th>
+                <th>Repository</th>
+              </tr>
+            </thead>
+            <tbody>
+              {installations.map((i) => (
+                <tr key={i.id} className="row-link" onClick={() => navigate(`/installations/${i.id}`)}>
+                  <td className="cell-name">{i.name}</td>
+                  <td>
+                    <StatusBadge status={i.status} />
+                  </td>
+                  <td className="cell-mono">{i.slug}</td>
+                  <td className="cell-dim">{i.repoUrl}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Shell>
   );
 }

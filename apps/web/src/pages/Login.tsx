@@ -21,22 +21,33 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   }
 
   return (
-    <div style={{ maxWidth: 320, margin: "10vh auto" }}>
-      <h1>remote-mcp-manager</h1>
-      <form onSubmit={submit}>
-        <input
-          type="password"
-          placeholder="Admin password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoFocus
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        />
-        <button type="submit" disabled={loading} style={{ width: "100%", padding: 8 }}>
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
-        {error && <p style={{ color: "crimson" }}>{error}</p>}
-      </form>
+    <div className="login-screen">
+      <div className="card login-card">
+        <div className="login-brand">
+          <span className="brand-mark">mcp</span>
+          <div>
+            <h1 className="login-title">remote-mcp-manager</h1>
+          </div>
+          <p className="login-sub">Sign in to manage your MCP server installations.</p>
+        </div>
+        <form onSubmit={submit}>
+          <div className="field">
+            <label htmlFor="password">Admin password</label>
+            <input
+              id="password"
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+            />
+          </div>
+          {error && <div className="alert">{error}</div>}
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: "100%", justifyContent: "center" }}>
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
