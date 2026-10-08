@@ -61,7 +61,7 @@ express.json())`), since the proxy route needs the raw stream untouched.
 
 Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).
 
-**Avoid it:** don't trust a green build as proof the runtime is correct. The manager now detects a Node version hint from the repo itself (`.nvmrc`, else `package.json` `engines.node`) and passes it to Nixpacks as `NIXPACKS_NODE_VERSION` (`apps/server/src/build/nixpacks.ts`, `detectNodeVersion`), so the build uses the version the repo actually declares instead of Nixpacks' own default. Repos with no version hint at all still get Nixpacks' default, unchanged.
+**Avoid it:** don't trust a green build as proof the runtime is correct. The manager now detects a Node version hint from the repo itself (`.nvmrc`, else `package.json` `engines.node`) and passes it to Nixpacks as `NIXPACKS_NODE_VERSION` (`apps/server/src/build/nixpacks.ts`, `detectNodeVersion`), so the build uses the version the repo actually declares instead of Nixpacks' own default. A Node repo (has `package.json`) with no hint of its own gets `DEFAULT_NODE_VERSION` (currently `20`) instead of falling through to Nixpacks' own default — confirmed necessary against a real repo (`ZenvairoSocial-MCP`, no `.nvmrc`/`engines.node` at all): build green, container crashed with "crypto is not defined" because Nixpacks picked Node 18, which predates stable `globalThis.crypto`.
 
 ## Nixpacks needs a dependency manifest, and fails cleanly without one
 

@@ -17,11 +17,17 @@ function parseMajorVersion(raw: string): string | undefined {
   return match ? match[1] : undefined;
 }
 
+// Nixpacks' own current default (18) predates stable globalThis.crypto/fetch — used as the
+// fallback for repos with a package.json but no version hint at all, confirmed in production
+// against ZenvairoSocial-MCP: build succeeded, container crashed on "crypto is not defined".
+const DEFAULT_NODE_VERSION = "20";
+
 /**
  * Nixpacks doesn't fail when a repo's declared runtime requirement isn't met — it silently
  * falls back to its own default version (seen in practice: Node 18 picked for a repo requiring
  * >=20, build green, container crashed at runtime on a missing global). Pinning
- * NIXPACKS_NODE_VERSION from the repo's own .nvmrc/package.json closes that gap for Node repos.
+ * NIXPACKS_NODE_VERSION from the repo's own .nvmrc/package.json closes that gap for Node repos;
+ * repos with no hint of their own still get DEFAULT_NODE_VERSION rather than nixpacks' default.
  */
 export function detectNodeVersion(repoDir: string): string | undefined {
   const nvmrcPath = path.join(repoDir, ".nvmrc");
@@ -31,20 +37,21 @@ export function detectNodeVersion(repoDir: string): string | undefined {
   }
 
   const pkgPath = path.join(repoDir, "package.json");
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { engines?: { node?: string } };
-      const engineNode = pkg.engines?.node;
-      if (typeof engineNode === "string") {
-        const version = parseMajorVersion(engineNode);
-        if (version) return version;
-      }
-    } catch {
-      // malformed package.json — nothing to pin, let nixpacks use its default
+  if (!fs.existsSync(pkgPath)) return undefined;
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { engines?: { node?: string } };
+    const engineNode = pkg.engines?.node;
+    if (typeof engineNode === "string") {
+      const version = parseMajorVersion(engineNode);
+      if (version) return version;
     }
+  } catch {
+    // malformed package.json — fall through to the default below
   }
 
-  return undefined;
+  // It's a Node project (has a package.json) but declares no version of its own.
+  return DEFAULT_NODE_VERSION;
 }
 
 export function runNixpacksBuild(slug: string, repoDir: string, imageTag: string): Promise<BuildResult> {
@@ -58,9 +65,7 @@ export function runNixpacksBuild(slug: string, repoDir: string, imageTag: string
     const nodeVersion = detectNodeVersion(repoDir);
     if (nodeVersion) {
       env.NIXPACKS_NODE_VERSION = nodeVersion;
-      logStream.write(
-        `[remote-mcp-manager] pinning NIXPACKS_NODE_VERSION=${nodeVersion} (detected from .nvmrc/package.json engines.node)\n`,
-      );
+      logStream.write(`[remote-mcp-manager] pinning NIXPACKS_NODE_VERSION=${nodeVersion}\n`);
     }
 
     const child = spawn("nixpacks", ["build", repoDir, "--name", imageTag], { env });

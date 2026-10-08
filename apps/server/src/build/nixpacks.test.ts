@@ -28,14 +28,20 @@ describe("detectNodeVersion", () => {
     expect(detectNodeVersion(dir)).toBe("20");
   });
 
-  it("returns undefined when there is no version hint", () => {
+  it("returns undefined for a non-Node repo (no package.json at all)", () => {
     const dir = mkTmpRepo();
     expect(detectNodeVersion(dir)).toBeUndefined();
   });
 
-  it("returns undefined for malformed package.json instead of throwing", () => {
+  it("falls back to the default version for a Node repo with no version hint", () => {
+    const dir = mkTmpRepo();
+    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "x" }));
+    expect(detectNodeVersion(dir)).toBe("20");
+  });
+
+  it("falls back to the default version for malformed package.json instead of throwing", () => {
     const dir = mkTmpRepo();
     fs.writeFileSync(path.join(dir, "package.json"), "{not valid json");
-    expect(detectNodeVersion(dir)).toBeUndefined();
+    expect(detectNodeVersion(dir)).toBe("20");
   });
 });
