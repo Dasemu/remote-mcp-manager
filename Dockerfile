@@ -23,7 +23,7 @@ RUN npm run build --workspace apps/web
 RUN npm run build --workspace apps/server
 
 FROM node:20-slim
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=nixpacks /usr/bin/nixpacks /usr/local/bin/nixpacks
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker

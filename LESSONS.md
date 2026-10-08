@@ -14,6 +14,14 @@ image stays the same — only pinning by digest guarantees bytes. For a single b
 prefer downloading the pinned release asset directly from the project's GitHub releases (a
 specific `vX.Y.Z` tag + exact filename) over extracting it from someone else's Docker image.
 
+## `git clone ssh://...` needs an actual `ssh` binary, and a key
+
+`node:20-slim` ships `git` but not `openssh-client` — cloning an `https://` repo works, but
+`ssh://` fails with "cannot run ssh: No such file or directory". Fixed by installing
+`openssh-client` in the final image. Separately, even with `ssh` present, cloning a private
+repo needs a key with access mounted into the container (`SSH_DIR` in `docker-compose.yml`,
+reusing the host's own deploy key) — confirmed both failures back to back while deploying.
+
 ## Nixpacks silently picks its own default runtime version
 
 Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).

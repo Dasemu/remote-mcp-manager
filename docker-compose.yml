@@ -18,6 +18,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/repo/data
+      # Reuses the host's own SSH key/known_hosts so the manager can `git clone` private
+      # repos over ssh:// the same way the host itself already does. Read-only.
+      # SSH_DIR must be an absolute path (compose doesn't expand "~").
+      - ${SSH_DIR}:/root/.ssh:ro
     networks:
       - mcp-net
 
