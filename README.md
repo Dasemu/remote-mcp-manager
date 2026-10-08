@@ -31,10 +31,27 @@ the manager itself must run as a container attached to `mcp-net` to reach the MC
 containers it manages — running it directly on the host only works for routes that
 don't need to reach a sibling container (e.g. `/health`, `/api/auth`).
 
+## Tests
+
+```sh
+npm test
+```
+
+Runs the `apps/server` unit test suite (vitest): the secrets encryption round-trip, the
+Nixpacks runtime-version detection, the admin-session middleware, and the installations
+state machine against a temporary SQLite DB. `.gitea/workflows/ci.yml` runs the same build
+and test steps on every push, provided this repo's Gitea instance has Actions enabled with
+a runner.
+
 ## Known limitations
 
 - Nixpacks needs a dependency manifest (`requirements.txt`/`pyproject.toml` for Python,
   `package.json` for Node) in the installed repo. Repos without one will fail to build;
   the full build log is always visible in the UI to diagnose this.
-- No per-container resource limits, image garbage collection, or multi-user support yet.
+- Every installed container gets the same memory/CPU caps (`CONTAINER_MEMORY_MB`,
+  `CONTAINER_CPUS`), no per-installation override yet.
+- No multi-user support — single operator only.
 - Builds run one at a time.
+
+See `LESSONS.md` for operational gotchas found while building and running this (Nixpacks
+runtime-version mismatches, Podman networking, SELinux, etc.).

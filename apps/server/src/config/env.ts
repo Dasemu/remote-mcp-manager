@@ -14,4 +14,7 @@ export const config = {
   publicBaseUrl: process.env.PUBLIC_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
   adminPassword: process.env.ADMIN_PASSWORD,
   sessionSecret: process.env.SESSION_SECRET,
+  // Per-container resource caps, applied to every installation (no per-installation override in V1).
+  containerMemoryMb: Number(process.env.CONTAINER_MEMORY_MB ?? 512),
+  containerCpus: Number(process.env.CONTAINER_CPUS ?? 1),
 };

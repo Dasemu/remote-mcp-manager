@@ -39,11 +39,31 @@ export async function runInstallationContainer(installation: Installation): Prom
     HostConfig: {
       RestartPolicy: { Name: "unless-stopped" },
       NetworkMode: config.mcpNetworkName,
+      Memory: config.containerMemoryMb * 1024 * 1024,
+      NanoCpus: Math.round(config.containerCpus * 1e9),
     },
   });
 
   await container.start();
   return container.id;
+}
+
+export async function getImageId(imageTag: string): Promise<string | undefined> {
+  try {
+    const info = await docker.getImage(imageTag).inspect();
+    return info.Id;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Best-effort removal: leaves the image alone if it's still referenced (e.g. by a running container). */
+export async function removeImageIfUnused(imageId: string): Promise<void> {
+  try {
+    await docker.getImage(imageId).remove({ force: false });
+  } catch {
+    // still in use or already gone — nothing to do
+  }
 }
 
 export async function stopInstallationContainer(containerName: string): Promise<void> {
