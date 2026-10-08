@@ -45,6 +45,18 @@ already in the LXC's root cgroup into a leaf scope and then writing the wanted c
 to the root's `cgroup.subtree_control` — not done here, since it's a live production LXC and
 restructuring its cgroup tree wasn't something to risk without asking first.
 
+## A global body parser breaks a reverse proxy mounted on the same app
+
+`app.use(express.json())` with no path restriction runs for *every* request, including the
+`/mcp/:slug` proxy route. By the time `http-proxy` tries to forward the request, body-parser
+has already fully drained the incoming stream — so the proxied request reaches the backend
+with the right `Content-Length` header but zero actual body bytes, and the backend just hangs
+waiting for a body that will never arrive. Every proxied POST (i.e. every real MCP call)
+hung with no response — found while testing the very first container through the proxy, not
+during earlier plain curl-to-container testing (which never went through Express's full
+middleware stack). Fixed by scoping the JSON parser to `/api` only (`app.use("/api",
+express.json())`), since the proxy route needs the raw stream untouched.
+
 ## Nixpacks silently picks its own default runtime version
 
 Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).

@@ -14,7 +14,6 @@ if (!config.sessionSecret) {
 
 const app = express();
 app.set("trust proxy", 1);
-app.use(express.json());
 app.use(
   session({
     secret: config.sessionSecret,
@@ -38,6 +37,11 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 // Bearer-token-gated MCP reverse proxy, public (auth handled per-installation).
 app.all("/mcp/:slug", handleMcpProxyRequest);
 
+// Scoped to /api only: a global express.json() would consume the request body of every
+// request — including /mcp/:slug — before http-proxy gets a chance to forward it, leaving
+// the proxied backend waiting forever for a body that already got drained. Confirmed on a
+// real deploy: every proxied POST (i.e. every real MCP call) hung with zero bytes received.
+app.use("/api", express.json());
 app.use("/api/auth", authRouter);
 app.use("/api/installations", requireAuth, installationsRouter);
 
