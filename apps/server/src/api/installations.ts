@@ -58,8 +58,17 @@ installationsRouter.post("/", async (req, res) => {
 });
 
 installationsRouter.patch("/:id/config", (req, res) => {
-  const { env, portEnvVar, hostEnvVar, httpPath, internalPort, basicAuthUsername, basicAuthPassword, startCommand } =
-    req.body ?? {};
+  const {
+    env,
+    portEnvVar,
+    hostEnvVar,
+    httpPath,
+    internalPort,
+    basicAuthUsername,
+    basicAuthPassword,
+    startCommand,
+    publishHostPort,
+  } = req.body ?? {};
   try {
     const installation = configureInstallation(req.params.id, {
       env,
@@ -70,6 +79,7 @@ installationsRouter.patch("/:id/config", (req, res) => {
       basicAuthUsername,
       basicAuthPassword,
       startCommand,
+      publishHostPort,
     });
     res.json(toPublicJson(installation));
   } catch (err) {

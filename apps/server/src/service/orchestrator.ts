@@ -56,6 +56,7 @@ export function configureInstallation(
     basicAuthUsername?: string | null;
     basicAuthPassword?: string | null;
     startCommand?: string | null;
+    publishHostPort?: number | null;
   },
 ): Installation {
   return updateInstallation(id, patch);

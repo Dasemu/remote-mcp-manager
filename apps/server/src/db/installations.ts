@@ -32,6 +32,7 @@ export interface Installation {
   basicAuthUsername: string | null;
   basicAuthPassword: string | null;
   startCommand: string | null;
+  publishHostPort: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +57,7 @@ interface Row {
   basic_auth_username: string | null;
   basic_auth_password_encrypted: string | null;
   start_command: string | null;
+  publish_host_port: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -81,6 +83,7 @@ function rowToInstallation(row: Row): Installation {
     basicAuthUsername: row.basic_auth_username,
     basicAuthPassword: row.basic_auth_password_encrypted ? decryptSecret(row.basic_auth_password_encrypted) : null,
     startCommand: row.start_command,
+    publishHostPort: row.publish_host_port,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -144,6 +147,7 @@ export interface InstallationUpdate {
   basicAuthUsername?: string | null;
   basicAuthPassword?: string | null;
   startCommand?: string | null;
+  publishHostPort?: number | null;
   gitRef?: string | null;
 }
 
@@ -167,6 +171,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
     basicAuthPassword:
       patch.basicAuthPassword !== undefined ? patch.basicAuthPassword : current.basicAuthPassword,
     startCommand: patch.startCommand !== undefined ? patch.startCommand : current.startCommand,
+    publishHostPort: patch.publishHostPort !== undefined ? patch.publishHostPort : current.publishHostPort,
     gitRef: patch.gitRef !== undefined ? patch.gitRef : current.gitRef,
   };
 
@@ -185,6 +190,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
       basic_auth_username = @basicAuthUsername,
       basic_auth_password_encrypted = @basicAuthPasswordEncrypted,
       start_command = @startCommand,
+      publish_host_port = @publishHostPort,
       git_ref = @gitRef,
       updated_at = @updatedAt
      WHERE id = @id`,
@@ -203,6 +209,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
     basicAuthUsername: next.basicAuthUsername,
     basicAuthPasswordEncrypted: next.basicAuthPassword ? encryptSecret(next.basicAuthPassword) : null,
     startCommand: next.startCommand,
+    publishHostPort: next.publishHostPort,
     gitRef: next.gitRef,
     updatedAt: new Date().toISOString(),
   });

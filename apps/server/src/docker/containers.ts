@@ -32,10 +32,19 @@ export async function runInstallationContainer(installation: Installation): Prom
     [installation.hostEnvVar]: "0.0.0.0",
   };
 
+  // Installations are unreachable from outside mcp-net by design — every MCP client goes
+  // through the manager's own reverse proxy. publishHostPort is the one deliberate exception:
+  // it publishes the container's port to the host's loopback, for a native process on the same
+  // host (e.g. a legacy nginx location) that needs to reach this container directly.
+  const portBinding = installation.publishHostPort
+    ? { [`${installation.internalPort}/tcp`]: [{ HostIp: "127.0.0.1", HostPort: String(installation.publishHostPort) }] }
+    : undefined;
+
   const container = await docker.createContainer({
     name: installation.containerName,
     Image: installation.imageTag,
     Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
+    ...(portBinding ? { ExposedPorts: { [`${installation.internalPort}/tcp`]: {} } } : {}),
     HostConfig: {
       RestartPolicy: { Name: "unless-stopped" },
       NetworkMode: config.mcpNetworkName,
@@ -45,6 +54,7 @@ export async function runInstallationContainer(installation: Installation): Prom
       // real deploy; the outer host's own cap (if any) is the only ceiling in that case.
       ...(config.containerMemoryMb > 0 ? { Memory: config.containerMemoryMb * 1024 * 1024 } : {}),
       ...(config.containerCpus > 0 ? { NanoCpus: Math.round(config.containerCpus * 1e9) } : {}),
+      ...(portBinding ? { PortBindings: portBinding } : {}),
     },
   });
 
