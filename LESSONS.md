@@ -2,6 +2,16 @@
 
 Recurring mistakes and gotchas found while building and operating this project, and how to avoid or work around them.
 
+## "Rebuild" must re-clone, not reuse the original checkout
+
+`buildInstallation` used to run `nixpacks build` directly against the repo directory left over
+from `createDraftInstallation`'s one-time clone — it never re-pulled. Every "rebuild" from the
+panel silently rebuilt the exact same old commit forever, even after pushing new commits to the
+repo; it looked like the rebuild worked (new image, new timestamp) but the code never changed.
+Found repeatedly while iterating on `nixpacks.toml` fixes against a live repo. Fixed by having
+`buildInstallation` call `cloneOrUpdateRepo` again (same as the initial clone) before every
+build.
+
 ## A pinned external image's *contents* can still change
 
 The Dockerfile pinned `ghcr.io/railwayapp/nixpacks:1.41.0` and copied `/usr/bin/nixpacks` out

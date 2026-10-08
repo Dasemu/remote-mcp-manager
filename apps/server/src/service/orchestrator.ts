@@ -69,6 +69,16 @@ export async function buildInstallation(id: string): Promise<Installation> {
   if (!installation) throw new Error("installation not found");
 
   updateInstallation(id, { status: "building", statusDetail: null });
+
+  // The clone on disk is otherwise only ever made once, at draft creation — without this,
+  // every "rebuild" silently reused that same stale checkout forever, never picking up new
+  // commits pushed to the repo afterwards.
+  try {
+    await cloneOrUpdateRepo(installation.slug, installation.repoUrl, installation.gitRef);
+  } catch (err) {
+    return updateInstallation(id, { status: "error", statusDetail: `git pull failed: ${(err as Error).message}` });
+  }
+
   const imageTag = `mcpmgr/${installation.slug}:latest`;
   const previousImageId = installation.imageTag ? await getImageId(installation.imageTag) : undefined;
 
