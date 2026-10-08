@@ -55,6 +55,7 @@ export function configureInstallation(
     internalPort?: number;
     basicAuthUsername?: string | null;
     basicAuthPassword?: string | null;
+    startCommand?: string | null;
   },
 ): Installation {
   return updateInstallation(id, patch);
@@ -68,7 +69,12 @@ export async function buildInstallation(id: string): Promise<Installation> {
   const imageTag = `mcpmgr/${installation.slug}:latest`;
   const previousImageId = installation.imageTag ? await getImageId(installation.imageTag) : undefined;
 
-  const result = await runNixpacksBuild(installation.slug, repoDir(installation.slug), imageTag);
+  const result = await runNixpacksBuild(
+    installation.slug,
+    repoDir(installation.slug),
+    imageTag,
+    installation.startCommand,
+  );
 
   if (!result.success) {
     return updateInstallation(id, {

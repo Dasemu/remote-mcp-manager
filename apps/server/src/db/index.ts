@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS installations (
 for (const ddl of [
   "ALTER TABLE installations ADD COLUMN basic_auth_username TEXT",
   "ALTER TABLE installations ADD COLUMN basic_auth_password_encrypted TEXT",
+  "ALTER TABLE installations ADD COLUMN start_command TEXT",
 ]) {
   try {
     db.exec(ddl);

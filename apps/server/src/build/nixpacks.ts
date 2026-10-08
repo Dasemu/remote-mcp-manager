@@ -54,7 +54,12 @@ export function detectNodeVersion(repoDir: string): string | undefined {
   return DEFAULT_NODE_VERSION;
 }
 
-export function runNixpacksBuild(slug: string, repoDir: string, imageTag: string): Promise<BuildResult> {
+export function runNixpacksBuild(
+  slug: string,
+  repoDir: string,
+  imageTag: string,
+  startCommand?: string | null,
+): Promise<BuildResult> {
   return new Promise((resolve) => {
     const buildId = Date.now().toString();
     const logPath = buildLogPath(slug, buildId);
@@ -62,6 +67,13 @@ export function runNixpacksBuild(slug: string, repoDir: string, imageTag: string
     const logStream = fs.createWriteStream(logPath, { flags: "a" });
 
     const args = ["build", repoDir, "--name", imageTag];
+    if (startCommand) {
+      // Lets an installation override the start command without needing a nixpacks.toml in
+      // the source repo — necessary for third-party repos we don't control (e.g. installing
+      // gitea.com/gitea/gitea-mcp as-is, which nixpacks builds fine but whose detected start
+      // command needs CLI flags like `-t http -p <port>` appended).
+      args.push("--start-cmd", startCommand);
+    }
     const nodeVersion = detectNodeVersion(repoDir);
     if (nodeVersion) {
       // nixpacks does NOT read NIXPACKS_* config from the process environment — only from

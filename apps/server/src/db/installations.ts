@@ -31,6 +31,7 @@ export interface Installation {
   bearerToken: string | null;
   basicAuthUsername: string | null;
   basicAuthPassword: string | null;
+  startCommand: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +55,7 @@ interface Row {
   env_json_encrypted: string | null;
   basic_auth_username: string | null;
   basic_auth_password_encrypted: string | null;
+  start_command: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,6 +80,7 @@ function rowToInstallation(row: Row): Installation {
     bearerToken: row.bearer_token_encrypted ? decryptSecret(row.bearer_token_encrypted) : null,
     basicAuthUsername: row.basic_auth_username,
     basicAuthPassword: row.basic_auth_password_encrypted ? decryptSecret(row.basic_auth_password_encrypted) : null,
+    startCommand: row.start_command,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -140,6 +143,7 @@ export interface InstallationUpdate {
   bearerToken?: string | null;
   basicAuthUsername?: string | null;
   basicAuthPassword?: string | null;
+  startCommand?: string | null;
   gitRef?: string | null;
 }
 
@@ -162,6 +166,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
       patch.basicAuthUsername !== undefined ? patch.basicAuthUsername : current.basicAuthUsername,
     basicAuthPassword:
       patch.basicAuthPassword !== undefined ? patch.basicAuthPassword : current.basicAuthPassword,
+    startCommand: patch.startCommand !== undefined ? patch.startCommand : current.startCommand,
     gitRef: patch.gitRef !== undefined ? patch.gitRef : current.gitRef,
   };
 
@@ -179,6 +184,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
       bearer_token_encrypted = @bearerTokenEncrypted,
       basic_auth_username = @basicAuthUsername,
       basic_auth_password_encrypted = @basicAuthPasswordEncrypted,
+      start_command = @startCommand,
       git_ref = @gitRef,
       updated_at = @updatedAt
      WHERE id = @id`,
@@ -196,6 +202,7 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
     bearerTokenEncrypted: next.bearerToken ? encryptSecret(next.bearerToken) : null,
     basicAuthUsername: next.basicAuthUsername,
     basicAuthPasswordEncrypted: next.basicAuthPassword ? encryptSecret(next.basicAuthPassword) : null,
+    startCommand: next.startCommand,
     gitRef: next.gitRef,
     updatedAt: new Date().toISOString(),
   });
