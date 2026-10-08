@@ -61,7 +61,14 @@ express.json())`), since the proxy route needs the raw stream untouched.
 
 Nixpacks does not fail when a repo's `engines`/version requirement isn't met — it silently falls back to its own default (e.g. picked Node 18 for a repo requiring Node >=20 in `Social-MCP`). The build goes green, then the container crashes at runtime (`crypto is not defined`, missing globals, etc.).
 
-**Avoid it:** don't trust a green build as proof the runtime is correct. The manager now detects a Node version hint from the repo itself (`.nvmrc`, else `package.json` `engines.node`) and passes it to Nixpacks as `NIXPACKS_NODE_VERSION` (`apps/server/src/build/nixpacks.ts`, `detectNodeVersion`), so the build uses the version the repo actually declares instead of Nixpacks' own default. A Node repo (has `package.json`) with no hint of its own gets `DEFAULT_NODE_VERSION` (currently `20`) instead of falling through to Nixpacks' own default — confirmed necessary against a real repo (`ZenvairoSocial-MCP`, no `.nvmrc`/`engines.node` at all): build green, container crashed with "crypto is not defined" because Nixpacks picked Node 18, which predates stable `globalThis.crypto`.
+**Avoid it:** don't trust a green build as proof the runtime is correct. The manager now detects a Node version hint from the repo itself (`.nvmrc`, else `package.json` `engines.node`) and passes it to Nixpacks (`apps/server/src/build/nixpacks.ts`, `detectNodeVersion`), so the build uses the version the repo actually declares instead of Nixpacks' own default. A Node repo (has `package.json`) with no hint of its own gets `DEFAULT_NODE_VERSION` (currently `20`) instead of falling through to Nixpacks' own default — confirmed necessary against a real repo (`ZenvairoSocial-MCP`, no `.nvmrc`/`engines.node` at all): build green, container crashed with "crypto is not defined" because Nixpacks picked Node 18, which predates stable `globalThis.crypto`.
+
+**Gotcha inside the gotcha:** `nixpacks` does **not** read `NIXPACKS_*` config from the
+process environment at all — only from its own `-e`/`--env` CLI flag. Setting
+`NIXPACKS_NODE_VERSION` as a plain env var on the spawned process is silently ignored
+(`nixpacks plan` still showed `nodejs_18`); the fix above only actually took effect once
+passed as `nixpacks build ... -e NIXPACKS_NODE_VERSION=20`. Caught because the very first
+container built after adding the "fix" still crashed the same way.
 
 ## Nixpacks needs a dependency manifest, and fails cleanly without one
 

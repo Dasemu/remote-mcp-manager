@@ -61,14 +61,17 @@ export function runNixpacksBuild(slug: string, repoDir: string, imageTag: string
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
     const logStream = fs.createWriteStream(logPath, { flags: "a" });
 
-    const env = { ...process.env };
+    const args = ["build", repoDir, "--name", imageTag];
     const nodeVersion = detectNodeVersion(repoDir);
     if (nodeVersion) {
-      env.NIXPACKS_NODE_VERSION = nodeVersion;
+      // nixpacks does NOT read NIXPACKS_* config from the process environment — only from
+      // its own `-e`/`--env` CLI flag (confirmed: setting it as a plain env var is silently
+      // ignored, `nixpacks plan` still showed nodejs_18 for a repo pinned to 20 that way).
+      args.push("-e", `NIXPACKS_NODE_VERSION=${nodeVersion}`);
       logStream.write(`[remote-mcp-manager] pinning NIXPACKS_NODE_VERSION=${nodeVersion}\n`);
     }
 
-    const child = spawn("nixpacks", ["build", repoDir, "--name", imageTag], { env });
+    const child = spawn("nixpacks", args);
     child.stdout.pipe(logStream, { end: false });
     child.stderr.pipe(logStream, { end: false });
 
