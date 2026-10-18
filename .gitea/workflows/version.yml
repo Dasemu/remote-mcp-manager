@@ -1,0 +1,41 @@
+name: Version
+
+# This repo has no `development` branch yet: every push to `master` is treated as a
+# direct push and bumps PATCH. Once `development` exists, split this into a PATCH bump
+# on push to `development` and a MINOR bump on a `development` -> `master` merge, per
+# the global CLAUDE.md versioning rules.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    if: github.actor != 'claude' && !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump PATCH version
+        run: |
+          set -e
+          VERSION_FILE="VERSION"
+          if [ ! -f "$VERSION_FILE" ]; then
+            echo "0.1.0" > "$VERSION_FILE"
+          fi
+          IFS='.' read -r MAJOR MINOR PATCH < "$VERSION_FILE"
+          PATCH=$((PATCH + 1))
+          echo "${MAJOR}.${MINOR}.${PATCH}" > "$VERSION_FILE"
+          echo "NEW_VERSION=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_ENV"
+
+      - name: Commit and push
+        run: |
+          git config user.name "claude"
+          git config user.email "noreply@anthropic.com"
+          git add VERSION
+          git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
+          git push origin HEAD:master
