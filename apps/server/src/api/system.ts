@@ -1,9 +1,14 @@
 import { Router } from "express";
-import { getSystemInfo, startSelfUpdate, SelfUpdateError } from "../system/selfUpdate.js";
+import { getSystemInfo, refreshRemoteStatus, startSelfUpdate, SelfUpdateError } from "../system/selfUpdate.js";
 
 export const systemRouter = Router();
 
 systemRouter.get("/", async (_req, res) => {
+  res.json(await getSystemInfo());
+});
+
+systemRouter.post("/check", async (_req, res) => {
+  await refreshRemoteStatus();
   res.json(await getSystemInfo());
 });
 

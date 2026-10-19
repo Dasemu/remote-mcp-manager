@@ -18,6 +18,7 @@ export function ManagerCard() {
   const [unreachable, setUnreachable] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [gaveUp, setGaveUp] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   async function refresh() {
     try {
@@ -57,6 +58,32 @@ export function ManagerCard() {
     }
   }, [requested, info, unreachable, startedAt]);
 
+  const repoConfigured = info !== null && info.unavailableReason !== "SELF_UPDATE_REPO_URL is not set";
+  const waitingForRemote = repoConfigured && info !== null && info.remote === null && info.phase === "idle";
+
+  // The first remote check runs in the background on the server; poll briefly until it lands.
+  useEffect(() => {
+    if (!waitingForRemote) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (++tries > 10) clearInterval(timer);
+      else refresh();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [waitingForRemote]);
+
+  async function checkNow() {
+    setChecking(true);
+    setError(null);
+    try {
+      setInfo(await api.checkManager());
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  }
+
   async function update() {
     if (!info) return;
     const msg =
@@ -84,7 +111,7 @@ export function ManagerCard() {
       <div className="card-header">
         <span className="card-title">Manager</span>
         <span className="card-hint">
-          {info ? `Version ${info.version} · ${info.ref}` : "Restarting…"}
+          {info ? `Version ${info.version} · ${info.sha ? info.sha.slice(0, 7) : "unknown commit"}` : "Restarting…"}
         </span>
       </div>
 
@@ -101,11 +128,12 @@ export function ManagerCard() {
           Last update {info.lastUpdate.ok ? "succeeded" : "did not complete (rolled back or failed; see the log)"} ({new Date(info.lastUpdate.finishedAt).toLocaleString()}).
         </p>
       )}
+      {!updating && info && repoConfigured && <RemoteLine info={info} checking={checking || waitingForRemote} />}
       {info && !info.canSelfUpdate && info.unavailableReason && (
         <p className="status-detail">Self-update unavailable: {info.unavailableReason}.</p>
       )}
 
-      <div>
+      <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
           className="btn"
@@ -115,9 +143,50 @@ export function ManagerCard() {
         >
           {updating ? "Updating…" : "Update manager"}
         </button>
+        {repoConfigured && (
+          <button type="button" className="btn btn-ghost" disabled={checking || updating} onClick={checkNow}>
+            {checking ? "Checking…" : "Check for updates"}
+          </button>
+        )}
       </div>
 
       {log && <pre className="log-pane">{log}</pre>}
+    </div>
+  );
+}
+
+function RemoteLine({ info, checking }: { info: SystemInfo; checking: boolean }) {
+  const remote = info.remote;
+  if (!remote) return <p className="status-detail">{checking ? "Checking the remote…" : ""}</p>;
+  if (remote.error) return <p className="status-detail">Could not check the remote: {remote.error}</p>;
+
+  const head = remote.remoteSha?.slice(0, 7);
+  const when = new Date(remote.checkedAt).toLocaleTimeString();
+  if (remote.behind === 0) {
+    return <p className="status-detail">Up to date with {info.ref} ({head}) · checked {when}</p>;
+  }
+  if (remote.behind === null) {
+    return (
+      <p className="status-detail">
+        {info.sha
+          ? `The installed commit is not in the history of ${info.ref}; its head is ${head}.`
+          : `The installed commit is unknown; ${info.ref} is at ${head}.`}
+      </p>
+    );
+  }
+  return (
+    <div>
+      <p className="status-detail">
+        {remote.behind} newer commit{remote.behind === 1 ? "" : "s"} on {info.ref} (head {head}) · checked {when}
+      </p>
+      <ul className="status-detail" style={{ margin: "4px 0 8px 18px" }}>
+        {remote.commits.map((c) => (
+          <li key={c.sha}>
+            <code>{c.sha}</code> {c.subject}
+          </li>
+        ))}
+        {remote.behind > remote.commits.length && <li>…and {remote.behind - remote.commits.length} more</li>}
+      </ul>
     </div>
   );
 }

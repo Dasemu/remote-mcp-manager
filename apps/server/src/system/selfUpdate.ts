@@ -5,12 +5,13 @@ import { spawn } from "node:child_process";
 import Docker from "dockerode";
 import { config } from "../config/env.js";
 import { listInstallations } from "../db/installations.js";
-import { cloneOrUpdateRepo, repoDir } from "../build/git.js";
+import { cloneOrUpdateRepo, readHeadSha, repoDir } from "../build/git.js";
 import { enqueueBuild } from "../service/buildQueue.js";
 import { killGroupAfter } from "../util/processTimeout.js";
 import { withTimeout } from "../util/withTimeout.js";
 import { demuxLogs } from "./dockerLogs.js";
-import { readVersion } from "./version.js";
+import { cachedRemoteStatus, checkRemote, isRemoteCheckStale } from "./remoteCheck.js";
+import { readInstalledSha, readVersion } from "./version.js";
 
 const docker = new Docker({ socketPath: config.dockerSocketPath });
 
@@ -46,8 +47,15 @@ export async function getSystemInfo() {
   // collected later; polling this endpoint is what picks it up.
   if (!lastResult && state.phase === "idle") await collectSelfUpdateResult();
   const self = await inspectSelf();
+  const installedSha = readInstalledSha();
+  // Refresh in the background so this endpoint never waits on a git fetch.
+  if (config.selfUpdateRepoUrl && state.phase === "idle" && isRemoteCheckStale(installedSha)) {
+    void checkRemote(installedSha);
+  }
   return {
     version: readVersion(),
+    sha: installedSha ?? null,
+    remote: cachedRemoteStatus(),
     uptimeSec: Math.round(process.uptime()),
     canSelfUpdate: Boolean(config.selfUpdateRepoUrl && self),
     unavailableReason: !config.selfUpdateRepoUrl
@@ -63,10 +71,10 @@ export async function getSystemInfo() {
   };
 }
 
-function runDockerBuild(contextDir: string, image: string, logPath: string): Promise<boolean> {
+function runDockerBuild(contextDir: string, image: string, logPath: string, sha: string | undefined): Promise<boolean> {
   return new Promise((resolve) => {
     const logStream = fs.createWriteStream(logPath, { flags: "a" });
-    const child = spawn("docker", ["build", "-t", image, contextDir], { detached: true });
+    const child = spawn("docker", ["build", "-t", image, ...(sha ? ["--build-arg", `GIT_SHA=${sha}`] : []), contextDir], { detached: true });
     killGroupAfter(child, BUILD_TIMEOUT_MS);
     child.stdout.pipe(logStream, { end: false });
     child.stderr.pipe(logStream, { end: false });
@@ -101,7 +109,9 @@ async function runUpdate(self: Docker.ContainerInspectInfo): Promise<void> {
 
       state.phase = "building";
       note(`building ${image}`);
-      if (!(await runDockerBuild(repoDir(CHECKOUT_SLUG), image, state.logPath!))) {
+      const sha = await readHeadSha(repoDir(CHECKOUT_SLUG));
+      note(`building commit ${sha ?? "unknown"}`);
+      if (!(await runDockerBuild(repoDir(CHECKOUT_SLUG), image, state.logPath!, sha))) {
         throw new Error(`image build failed, see ${state.logPath}`);
       }
 
@@ -148,6 +158,11 @@ async function runUpdate(self: Docker.ContainerInspectInfo): Promise<void> {
 /** True from the moment an update is requested until it fails; a successful one ends this process. */
 export function isSelfUpdateInProgress(): boolean {
   return state.phase !== "idle";
+}
+
+/** Forces a fresh look at the remote (the panel's "Check now"). */
+export function refreshRemoteStatus() {
+  return checkRemote(readInstalledSha(), true);
 }
 
 export class SelfUpdateError extends Error {

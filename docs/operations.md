@@ -65,3 +65,20 @@ progress, and the hand-over runs inside the build queue, so no installation buil
 updater removes the old manager image after a successful swap, so before running `docker compose
 up -d --build` on the host again, `git pull` its checkout first or compose will rebuild (and
 deploy) an older version than the one installed from the panel.
+
+## Installed version and newer commits
+
+The Manager card shows the version (`VERSION`) and the **commit SHA** the running image was built
+from, and how many commits `SELF_UPDATE_REF` has on `SELF_UPDATE_REPO_URL` that it doesn't (with
+the subjects of the latest 20). `Check for updates` forces a refresh; otherwise the result is
+cached for 10 minutes (1 minute after a failure) and refreshed in the background by
+`GET /api/system`, so the endpoint never waits on git.
+
+- **Where the SHA comes from:** the `GIT_SHA` build arg (baked as an image `ENV`). The panel's
+  self-update passes it itself. With compose, build with
+  `GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build`; without it the card says
+  "unknown commit" and can only show the remote head. In local dev it is read with `git rev-parse`.
+- **How it counts:** a history-only (blobless where the server allows it) fetch into the bare repo
+  `data/repos/_manager-check`, then `git rev-list --count <installed>..<remote head>`. If the
+  installed commit isn't an ancestor of the remote head (force-push, other branch) only the remote
+  head is shown.

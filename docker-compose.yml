@@ -1,6 +1,11 @@
 services:
   manager:
-    build: .
+    build:
+      context: .
+      args:
+        # export GIT_SHA=$(git rev-parse HEAD) before `docker compose up -d --build` so the panel
+        # can show which commit is installed and how far behind the remote it is.
+        GIT_SHA: ${GIT_SHA:-unknown}
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"

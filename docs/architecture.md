@@ -61,3 +61,5 @@ don't need to reach a sibling container (e.g. `/health`, `/api/auth`). See the R
 `system/selfUpdateHelper.ts` (the updater container's entry point: swap, health check, rollback)
 implement the panel's *Update manager* button, exposed as `GET /api/system` and
 `POST /api/system/update` behind `requireAuth`. See `docs/operations.md`.
+`system/remoteCheck.ts` compares the installed commit (`GIT_SHA`) with the remote head to show how many
+commits behind the manager is.
