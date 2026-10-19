@@ -3,6 +3,7 @@ import Docker from "dockerode";
 import { config } from "../config/env.js";
 import type { Installation } from "../db/installations.js";
 import { withTimeout } from "../util/withTimeout.js";
+import { isNotFoundError, isNotModifiedError } from "./errors.js";
 
 const docker = new Docker({ socketPath: config.dockerSocketPath });
 
@@ -18,6 +19,8 @@ export async function ensureNetwork(name: string): Promise<void> {
 // cache plus a call timeout keeps one wedged Docker daemon from snowballing into the proxy.
 const IP_CACHE_TTL_MS = 5_000;
 const DOCKER_CALL_TIMEOUT_MS = 10_000;
+// stop/restart send SIGTERM and wait the daemon's grace period (10s) before SIGKILL.
+const DOCKER_STOP_TIMEOUT_MS = 30_000;
 const ipCache = new Map<string, { ip: Promise<string>; expires: number }>();
 
 export async function removeContainerIfExists(containerName: string): Promise<void> {
@@ -98,6 +101,39 @@ export async function removeImageIfUnused(imageId: string): Promise<void> {
 export async function stopInstallationContainer(containerName: string): Promise<void> {
   await removeContainerIfExists(containerName);
 }
+
+// Lifecycle actions on the EXISTING container (no remove/recreate, so the image and the
+// config it was created with stay untouched). Resolves false when the container no longer
+// exists, so the caller can fall back to a full deploy. The container's IP can change across a
+// stop/start, hence the cache is dropped before and after.
+async function actOnExistingContainer(
+  containerName: string,
+  what: string,
+  timeoutMs: number,
+  action: (container: Docker.Container) => Promise<unknown>,
+): Promise<boolean> {
+  ipCache.delete(containerName);
+  try {
+    await withTimeout(action(docker.getContainer(containerName)), timeoutMs, `docker ${what} ${containerName}`);
+    return true;
+  } catch (err) {
+    if (isNotFoundError(err)) return false;
+    // start on a running container / stop on a stopped one: already where we want it.
+    if (isNotModifiedError(err)) return true;
+    throw err;
+  } finally {
+    ipCache.delete(containerName);
+  }
+}
+
+export const stopContainer = (containerName: string) =>
+  actOnExistingContainer(containerName, "stop", DOCKER_STOP_TIMEOUT_MS, (c) => c.stop());
+
+export const startContainer = (containerName: string) =>
+  actOnExistingContainer(containerName, "start", DOCKER_CALL_TIMEOUT_MS, (c) => c.start());
+
+export const restartContainer = (containerName: string) =>
+  actOnExistingContainer(containerName, "restart", DOCKER_STOP_TIMEOUT_MS, (c) => c.restart());
 
 async function lookupContainerIp(containerName: string): Promise<string> {
   const info = await withTimeout(

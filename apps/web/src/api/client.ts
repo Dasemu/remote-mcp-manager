@@ -53,6 +53,9 @@ export const api = {
   deploy: (id: string) => request<Installation>(`/api/installations/${id}/deploy`, { method: "POST" }),
   redeploy: (id: string, rebuild: boolean) =>
     request<Installation>(`/api/installations/${id}/redeploy`, { method: "POST", body: JSON.stringify({ rebuild }) }),
+  start: (id: string) => request<Installation>(`/api/installations/${id}/start`, { method: "POST" }),
+  stop: (id: string) => request<Installation>(`/api/installations/${id}/stop`, { method: "POST" }),
+  restart: (id: string) => request<Installation>(`/api/installations/${id}/restart`, { method: "POST" }),
   regenerateToken: (id: string) =>
     request<{ bearerToken: string }>(`/api/installations/${id}/regenerate-token`, { method: "POST" }),
   remove: (id: string) => request<void>(`/api/installations/${id}`, { method: "DELETE" }),

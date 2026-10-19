@@ -13,6 +13,9 @@ import {
   buildInstallation,
   deployInstallation,
   redeployInstallation,
+  startInstallation,
+  stopInstallation,
+  restartInstallation,
   removeInstallationContainer,
 } from "../service/orchestrator.js";
 import { buildLogPath } from "../build/nixpacks.js";
@@ -116,6 +119,24 @@ installationsRouter.post("/:id/redeploy", async (req, res) => {
     res.status(500).json({ error: (err as Error).message });
   }
 });
+
+for (const [action, handler] of [
+  ["start", startInstallation],
+  ["stop", stopInstallation],
+  ["restart", restartInstallation],
+] as const) {
+  installationsRouter.post(`/:id/${action}`, async (req, res) => {
+    if (!getInstallationById(req.params.id)) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    try {
+      res.json(toPublicJson(await handler(req.params.id)));
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+}
 
 installationsRouter.get("/:id/logs", (req, res) => {
   const installation = getInstallationById(req.params.id);

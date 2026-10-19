@@ -24,6 +24,27 @@
    (`apps/server/src/proxy/mcpProxy.ts`, constant-time comparison) and proxied to the
    container's IP on the shared network.
 
+## Start / Stop / Restart vs Deploy
+
+Two families of actions, both in `apps/server/src/service/orchestrator.ts`:
+
+- **Build / Deploy** change what runs. Build re-clones the repo and produces a new image
+  (the running container is untouched). Deploy removes any existing container and creates a
+  new one from the built image, so it is the only way to apply changed env/config.
+  "Redeploy (env only)" is Deploy again with the current image; "Rebuild & redeploy" is Build
+  then Deploy (and stops before deploying if the build fails).
+- **Start / Stop / Restart** only change whether the *existing* container runs
+  (`docker stop|start|restart`; nothing is removed or recreated, so they are fast and never
+  apply new env/config). Stop sets status `stopped`; the container's `unless-stopped` restart
+  policy keeps it stopped until started. Start and Restart set `starting`, wait for the
+  container to listen (same health check as Deploy), then `running` (or `error` with the
+  reason). If the container no longer exists they fall back to Deploy when the installation
+  has a built image, and report an error otherwise.
+
+The proxy only serves installations in status `running`, so a stopped or restarting
+installation answers 404 until it is healthy again. The per-container IP cache is dropped on
+every start/stop/restart because the IP can change.
+
 ## Why the manager itself must run as a container
 
 Rootless Podman isolates the host network namespace from the container bridge, so the

@@ -12,6 +12,9 @@ import { runNixpacksBuild } from "../build/nixpacks.js";
 import {
   runInstallationContainer,
   stopInstallationContainer,
+  stopContainer,
+  startContainer,
+  restartContainer,
   waitForContainerHealth,
   getImageId,
   removeImageIfUnused,
@@ -142,6 +145,52 @@ export async function redeployInstallation(id: string, opts: { rebuild?: boolean
     if (built.status === "error") return built;
   }
   return deployInstallation(id);
+}
+
+// Start/restart act on the existing container, so they never apply changed env/config (that
+// needs a deploy, which recreates it). If the container is gone (e.g. pruned after a host
+// reboot) they fall back to a deploy from the built image.
+async function resumeInstallation(
+  id: string,
+  act: (containerName: string) => Promise<boolean>,
+): Promise<Installation> {
+  const installation = getInstallationById(id);
+  if (!installation) throw new Error("installation not found");
+
+  updateInstallation(id, { status: "starting", statusDetail: null });
+
+  try {
+    if (!(await act(installation.containerName))) {
+      if (!installation.imageTag) {
+        throw new Error("container does not exist and the installation has no built image — build it first");
+      }
+      return await deployInstallation(id);
+    }
+    await waitForContainerHealth(installation);
+
+    const bearerToken = installation.bearerToken ?? generateBearerToken();
+    return updateInstallation(id, { status: "running", statusDetail: null, bearerToken });
+  } catch (err) {
+    return updateInstallation(id, { status: "error", statusDetail: (err as Error).message });
+  }
+}
+
+export const startInstallation = (id: string) => resumeInstallation(id, startContainer);
+
+export const restartInstallation = (id: string) => resumeInstallation(id, restartContainer);
+
+/** Stops the container without removing it; it stays stopped (restart policy `unless-stopped`) until started again. */
+export async function stopInstallation(id: string): Promise<Installation> {
+  const installation = getInstallationById(id);
+  if (!installation) throw new Error("installation not found");
+
+  try {
+    // A missing container is already stopped as far as the operator is concerned.
+    await stopContainer(installation.containerName);
+    return updateInstallation(id, { status: "stopped", statusDetail: null });
+  } catch (err) {
+    return updateInstallation(id, { status: "error", statusDetail: (err as Error).message });
+  }
 }
 
 export async function removeInstallationContainer(id: string): Promise<void> {
