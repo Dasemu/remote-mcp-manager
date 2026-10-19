@@ -41,7 +41,9 @@ Two families of actions, both in `apps/server/src/service/orchestrator.ts`:
   reason). If the container no longer exists they fall back to Deploy when the installation
   has a built image, and report an error otherwise.
 
-The proxy only serves installations in status `running`, so a stopped or restarting
+A build never touches the running container, so an installation that is `running` stays
+`running` (and served) during and after a build, even a failed one; the failure shows in the
+status detail. The proxy only serves installations in status `running`, so a stopped or restarting
 installation answers 404 until it is healthy again. The per-container IP cache is dropped on
 every start/stop/restart because the IP can change.
 

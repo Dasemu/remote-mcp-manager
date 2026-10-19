@@ -15,7 +15,8 @@ limits exist:
 | Session store | `session/sqliteStore.ts` | Sessions live in the SQLite DB and expired ones are purged every 10 min. Replaces `MemoryStore`, which never evicts and warned it leaks in production. |
 | Memory guard | `MANAGER_MEMORY_LIMIT_MB` (default 512, 0 = off) | Checked every 30 s on heap + external memory (not RSS, which hides swapped pages). When exceeded the process exits and `restart: unless-stopped` starts a fresh one. |
 | V8 heap ceiling | `NODE_OPTIONS=--max-old-space-size=768` in the `Dockerfile` | Hard backstop above the soft limit. |
-| Serialized builds | `service/orchestrator.ts` | One Nixpacks/Docker build at a time; git is killed after 5 min and a build after 30 min. |
+| Serialized builds | `service/orchestrator.ts` | One Nixpacks/Docker build at a time; git is killed after 5 min and a build after 30 min (the whole process group, so a hung `docker build` can't keep the queue blocked). |
+| Restart reconciliation | `reconcileInterruptedInstallations` | On boot, `cloning`/`building`/`starting` installations are marked `error` (Start or Redeploy recovers them), since the process that was advancing them is gone. |
 
 A container-level cgroup limit on the manager (`mem_limit` in compose) would be the strongest
 guard, but it fails outright on hosts that do not delegate cgroup controllers (see

@@ -61,9 +61,10 @@ export class SqliteSessionStore extends session.Store {
   touch(sid: string, sess: session.SessionData, cb?: () => void): void {
     try {
       this.db.prepare("UPDATE sessions SET expires = ? WHERE sid = ?").run(this.expiryOf(sess), sid);
-    } finally {
-      cb?.();
+    } catch {
+      // best effort: a failed touch only means the session expires on its original schedule
     }
+    cb?.();
   }
 
   destroy(sid: string, cb?: (err?: unknown) => void): void {

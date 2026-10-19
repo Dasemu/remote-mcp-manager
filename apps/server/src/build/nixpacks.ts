@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { config } from "../config/env.js";
+import { killGroupAfter } from "../util/processTimeout.js";
 
 export function buildLogPath(slug: string, buildId: string): string {
   return path.join(config.logsDir, slug, `${buildId}.log`);
@@ -86,7 +87,8 @@ export function runNixpacksBuild(
       logStream.write(`[remote-mcp-manager] pinning NIXPACKS_NODE_VERSION=${nodeVersion}\n`);
     }
 
-    const child = spawn("nixpacks", args, { timeout: BUILD_TIMEOUT_MS });
+    const child = spawn("nixpacks", args, { detached: true });
+    killGroupAfter(child, BUILD_TIMEOUT_MS);
     child.stdout.pipe(logStream, { end: false });
     child.stderr.pipe(logStream, { end: false });
 

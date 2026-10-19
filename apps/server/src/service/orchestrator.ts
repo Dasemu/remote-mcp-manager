@@ -72,15 +72,28 @@ export function configureInstallation(
   return updateInstallation(id, patch);
 }
 
-export function buildInstallation(id: string): Promise<Installation> {
-  return enqueueBuild(() => runBuild(id));
+interface BuildOutcome {
+  installation: Installation;
+  ok: boolean;
 }
 
-async function runBuild(id: string): Promise<Installation> {
+export async function buildInstallation(id: string): Promise<Installation> {
+  return (await enqueueBuild(() => runBuild(id))).installation;
+}
+
+async function runBuild(id: string): Promise<BuildOutcome> {
   const installation = getInstallationById(id);
   if (!installation) throw new Error("installation not found");
 
-  updateInstallation(id, { status: "building", statusDetail: null });
+  // A build never touches the running container, so a running installation keeps its
+  // "running" status (and keeps being served by the proxy) throughout, whether the build
+  // succeeds or fails. Any other installation shows the build's progress/failure instead.
+  const wasRunning = installation.status === "running";
+  if (!wasRunning) updateInstallation(id, { status: "building", statusDetail: null });
+  const fail = (detail: string): BuildOutcome => ({
+    installation: updateInstallation(id, { status: wasRunning ? "running" : "error", statusDetail: detail }),
+    ok: false,
+  });
 
   // The clone on disk is otherwise only ever made once, at draft creation — without this,
   // every "rebuild" silently reused that same stale checkout forever, never picking up new
@@ -88,7 +101,7 @@ async function runBuild(id: string): Promise<Installation> {
   try {
     await cloneOrUpdateRepo(installation.slug, installation.repoUrl, installation.gitRef);
   } catch (err) {
-    return updateInstallation(id, { status: "error", statusDetail: `git pull failed: ${(err as Error).message}` });
+    return fail(`git pull failed: ${(err as Error).message}`);
   }
 
   const imageTag = `mcpmgr/${installation.slug}:latest`;
@@ -102,10 +115,7 @@ async function runBuild(id: string): Promise<Installation> {
   );
 
   if (!result.success) {
-    return updateInstallation(id, {
-      status: "error",
-      statusDetail: `build failed, see log at ${result.logPath}`,
-    });
+    return fail(`build failed, see log at ${result.logPath}`);
   }
 
   // Nixpacks moves the tag to the new image, leaving the previous one dangling — clean it up
@@ -117,7 +127,10 @@ async function runBuild(id: string): Promise<Installation> {
     }
   }
 
-  return updateInstallation(id, { status: "built", statusDetail: null, imageTag });
+  return {
+    installation: updateInstallation(id, { status: wasRunning ? "running" : "built", statusDetail: null, imageTag }),
+    ok: true,
+  };
 }
 
 export async function deployInstallation(id: string): Promise<Installation> {
@@ -139,10 +152,10 @@ export async function deployInstallation(id: string): Promise<Installation> {
 
 export async function redeployInstallation(id: string, opts: { rebuild?: boolean } = {}): Promise<Installation> {
   if (opts.rebuild) {
-    // A failed build must stop here: deploying anyway would silently run the previous image
-    // and flip the status back to "running", hiding the failure.
-    const built = await buildInstallation(id);
-    if (built.status === "error") return built;
+    // A failed build must stop here: deploying anyway would silently redeploy the previous image
+    // and report success, hiding the failure.
+    const built = await enqueueBuild(() => runBuild(id));
+    if (!built.ok) return built.installation;
   }
   return deployInstallation(id);
 }

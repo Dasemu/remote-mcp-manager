@@ -82,7 +82,7 @@ export async function runInstallationContainer(installation: Installation): Prom
 
 export async function getImageId(imageTag: string): Promise<string | undefined> {
   try {
-    const info = await docker.getImage(imageTag).inspect();
+    const info = await withTimeout(docker.getImage(imageTag).inspect(), DOCKER_CALL_TIMEOUT_MS, `docker inspect ${imageTag}`);
     return info.Id;
   } catch {
     return undefined;
@@ -92,7 +92,7 @@ export async function getImageId(imageTag: string): Promise<string | undefined> 
 /** Best-effort removal: leaves the image alone if it's still referenced (e.g. by a running container). */
 export async function removeImageIfUnused(imageId: string): Promise<void> {
   try {
-    await docker.getImage(imageId).remove({ force: false });
+    await withTimeout(docker.getImage(imageId).remove({ force: false }), DOCKER_CALL_TIMEOUT_MS, "docker image rm");
   } catch {
     // still in use or already gone — nothing to do
   }

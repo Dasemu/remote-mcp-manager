@@ -3,6 +3,7 @@ import express from "express";
 import session from "express-session";
 import { config } from "./config/env.js";
 import { db } from "./db/index.js";
+import { reconcileInterruptedInstallations } from "./db/installations.js";
 import { getActiveProxyRequests, handleMcpProxyRequest } from "./proxy/mcpProxy.js";
 import { authRouter } from "./api/auth.js";
 import { installationsRouter } from "./api/installations.js";
@@ -13,6 +14,9 @@ import { startMemoryGuard } from "./service/memoryGuard.js";
 if (!config.sessionSecret) {
   throw new Error("SESSION_SECRET env var must be set");
 }
+
+const interrupted = reconcileInterruptedInstallations();
+if (interrupted > 0) console.warn(`marked ${interrupted} interrupted installation(s) as error after restart`);
 
 const app = express();
 app.set("trust proxy", 1);
