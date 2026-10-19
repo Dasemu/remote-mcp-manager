@@ -25,4 +25,8 @@ export const config = {
   // The manager exits (and the container restart policy brings it back) once its own
   // heap + external memory exceeds this. 0 disables the guard.
   memoryLimitMb: Number(process.env.MANAGER_MEMORY_LIMIT_MB ?? 512),
+  // Self-update: git repo/ref the manager rebuilds itself from. Operator-set only (never taken
+  // from a request); without a repo URL the panel's "Update manager" button is disabled.
+  selfUpdateRepoUrl: process.env.SELF_UPDATE_REPO_URL || undefined,
+  selfUpdateRef: process.env.SELF_UPDATE_REF || "master",
 };

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Installation } from "../api/client";
 import { InstallWizard } from "./InstallWizard";
+import { ManagerCard } from "../components/ManagerCard";
 import { Shell } from "../components/Shell";
 import { StatusBadge } from "../components/StatusBadge";
 
@@ -71,6 +72,8 @@ export function InstallationList({ onLoggedOut }: { onLoggedOut: () => void }) {
           </table>
         </div>
       )}
+
+      <ManagerCard />
     </Shell>
   );
 }

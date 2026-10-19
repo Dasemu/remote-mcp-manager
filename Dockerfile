@@ -38,9 +38,15 @@ RUN npm ci --omit=dev --workspace apps/server
 
 COPY --from=build /repo/apps/server/dist apps/server/dist
 COPY --from=build /repo/apps/web/dist apps/web/dist
+# Shown in the panel next to the self-update button.
+COPY VERSION VERSION
 
 WORKDIR /repo/apps/server
 ENV NODE_ENV=production
+# Commit this image was built from, shown in the panel. Passed with --build-arg GIT_SHA=<sha>
+# (compose: see docker-compose.yml; the panel's self-update does it itself).
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
 # Hard V8 heap ceiling, above MANAGER_MEMORY_LIMIT_MB (the soft limit the app enforces itself):
 # a leak ends in a crash + restart by the compose restart policy instead of swapping the host.
 ENV NODE_OPTIONS=--max-old-space-size=768

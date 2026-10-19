@@ -19,6 +19,28 @@ export interface Installation {
   updatedAt: string;
 }
 
+export interface RemoteStatus {
+  checkedAt: string;
+  remoteSha: string | null;
+  behind: number | null;
+  commits: { sha: string; subject: string }[];
+  error: string | null;
+}
+
+export interface SystemInfo {
+  version: string;
+  sha: string | null;
+  remote: RemoteStatus | null;
+  uptimeSec: number;
+  canSelfUpdate: boolean;
+  unavailableReason: string | null;
+  ref: string;
+  phase: "idle" | "cloning" | "building" | "handing-over";
+  error: string | null;
+  log: string;
+  lastUpdate: { finishedAt: string; ok: boolean; log: string } | null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -60,4 +82,8 @@ export const api = {
     request<{ bearerToken: string }>(`/api/installations/${id}/regenerate-token`, { method: "POST" }),
   remove: (id: string) => request<void>(`/api/installations/${id}`, { method: "DELETE" }),
   logs: (id: string) => request<{ log: string }>(`/api/installations/${id}/logs`),
+
+  systemInfo: () => request<SystemInfo>("/api/system"),
+  checkManager: () => request<SystemInfo>("/api/system/check", { method: "POST" }),
+  updateManager: () => request<{ ok: true }>("/api/system/update", { method: "POST" }),
 };

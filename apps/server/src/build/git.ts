@@ -7,10 +7,15 @@ import { killGroupAfter } from "../util/processTimeout.js";
 // A clone that never finishes (e.g. ssh waiting on a prompt) would otherwise hang forever.
 const GIT_TIMEOUT_MS = 5 * 60 * 1000;
 
-function run(cmd: string, args: string[], cwd?: string): Promise<{ code: number; output: string }> {
+export function run(
+  cmd: string,
+  args: string[],
+  cwd?: string,
+  timeoutMs = GIT_TIMEOUT_MS,
+): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, detached: true });
-    killGroupAfter(child, GIT_TIMEOUT_MS);
+    killGroupAfter(child, timeoutMs);
     let output = "";
     child.stdout.on("data", (d) => (output += d.toString()));
     child.stderr.on("data", (d) => (output += d.toString()));
@@ -37,6 +42,13 @@ export async function cloneOrUpdateRepo(slug: string, repoUrl: string, gitRef?: 
   }
 
   return dir;
+}
+
+/** Full SHA of the checkout's HEAD, or undefined if it can't be read. */
+export async function readHeadSha(dir: string): Promise<string | undefined> {
+  const { code, output } = await run("git", ["rev-parse", "HEAD"], dir).catch(() => ({ code: 1, output: "" }));
+  const sha = output.trim();
+  return code === 0 && /^[0-9a-f]{40}$/.test(sha) ? sha : undefined;
 }
 
 export function readEnvExampleKeys(dir: string): string[] {

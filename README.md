@@ -14,6 +14,12 @@ docker compose up -d --build
 
 Put your own reverse proxy (nginx, etc.) in front of port 3000 for TLS and your public domain.
 
+## Updating
+
+Set `SELF_UPDATE_REPO_URL` (and optionally `SELF_UPDATE_REF`) in `.env` and use the **Update manager**
+button in the panel: it builds the latest source and swaps the manager's container, rolling back
+if the new one isn't healthy. Details in [docs/operations.md](docs/operations.md).
+
 ## Local development (Podman)
 
 Requires `nixpacks` and a `docker` CLI pointed at your Podman socket (e.g. via the
