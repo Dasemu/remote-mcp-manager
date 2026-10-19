@@ -7,6 +7,8 @@ import { reconcileInterruptedInstallations } from "./db/installations.js";
 import { getActiveProxyRequests, handleMcpProxyRequest } from "./proxy/mcpProxy.js";
 import { authRouter } from "./api/auth.js";
 import { installationsRouter } from "./api/installations.js";
+import { systemRouter } from "./api/system.js";
+import { collectSelfUpdateResult } from "./system/selfUpdate.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { SqliteSessionStore } from "./session/sqliteStore.js";
 import { startMemoryGuard } from "./service/memoryGuard.js";
@@ -28,6 +30,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
+      // Lax: a cross-site form POST must not carry the session (e.g. to trigger a manager update).
+      sameSite: "lax",
       // "auto": secure only if the request actually arrived over HTTPS (checks req.secure,
       // which respects "trust proxy" + X-Forwarded-Proto). A flat `NODE_ENV === "production"`
       // check meant the cookie was never stored at all when the admin panel is reached over
@@ -60,6 +64,7 @@ app.all("/mcp/:slug", handleMcpProxyRequest);
 app.use("/api", express.json());
 app.use("/api/auth", authRouter);
 app.use("/api/installations", requireAuth, installationsRouter);
+app.use("/api/system", requireAuth, systemRouter);
 
 const webDist = path.resolve(import.meta.dirname, "../../web/dist");
 app.use(express.static(webDist));
@@ -72,6 +77,9 @@ app.get(/^\/(?!api|mcp|health).*/, (_req, res) => {
 const server = app.listen(config.port, () => {
   console.log(`remote-mcp-manager listening on http://localhost:${config.port}`);
 });
+
+// If an updater container ran just before this boot, pick up its outcome for the panel.
+void collectSelfUpdateResult();
 
 function shutdown(code: number): void {
   server.close(() => process.exit(code));

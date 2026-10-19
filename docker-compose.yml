@@ -18,6 +18,8 @@ services:
       PROXY_TIMEOUT_MS: ${PROXY_TIMEOUT_MS:-300000}
       MAX_PROXY_REQUESTS: ${MAX_PROXY_REQUESTS:-100}
       MANAGER_MEMORY_LIMIT_MB: ${MANAGER_MEMORY_LIMIT_MB:-512}
+      SELF_UPDATE_REPO_URL: ${SELF_UPDATE_REPO_URL:-}
+      SELF_UPDATE_REF: ${SELF_UPDATE_REF:-master}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/repo/data

@@ -54,3 +54,10 @@ manager can only reach sibling MCP containers (by IP on `mcp-net`) when it is it
 attached to that network — running it directly on the host only works for routes that
 don't need to reach a sibling container (e.g. `/health`, `/api/auth`). See the README's
 "Local development (Podman)" section and `LESSONS.md` for the operational detail.
+
+## Self-update
+
+`system/selfUpdate.ts` (state, clone + build in the shared build queue, hand-over) and
+`system/selfUpdateHelper.ts` (the updater container's entry point: swap, health check, rollback)
+implement the panel's *Update manager* button, exposed as `GET /api/system` and
+`POST /api/system/update` behind `requireAuth`. See `docs/operations.md`.

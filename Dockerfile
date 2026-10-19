@@ -38,6 +38,8 @@ RUN npm ci --omit=dev --workspace apps/server
 
 COPY --from=build /repo/apps/server/dist apps/server/dist
 COPY --from=build /repo/apps/web/dist apps/web/dist
+# Shown in the panel next to the self-update button.
+COPY VERSION VERSION
 
 WORKDIR /repo/apps/server
 ENV NODE_ENV=production

@@ -21,8 +21,19 @@ import {
 import { buildLogPath } from "../build/nixpacks.js";
 import { generateBearerToken } from "../crypto/secrets.js";
 import fs from "node:fs";
+import { isSelfUpdateInProgress } from "../system/selfUpdate.js";
 
 export const installationsRouter = Router();
+
+// An update swaps the manager's own container; an installation build or start in flight would be
+// killed by it, so changes wait until the update is over.
+installationsRouter.use((req, res, next) => {
+  if (req.method !== "GET" && isSelfUpdateInProgress()) {
+    res.status(409).json({ error: "the manager is updating itself; try again in a minute" });
+    return;
+  }
+  next();
+});
 
 // Not masked: this API sits behind single-operator session auth (requireAuth), and the
 // operator is the same person who owns these secrets — editing them requires seeing them.

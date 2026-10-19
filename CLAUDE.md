@@ -40,3 +40,6 @@ authenticated requests to it. See `README.md` for the full flow and `docs/` for 
 - Local Node 24 cannot compile `better-sqlite3@11`, so `npm test` fails on the host: run the suite in a
   `node:20` container (`podman run ... docker.io/library/node:20-slim`, repo copied without `node_modules`).
 - `.gitea/workflows/ci.yml` only runs if this repo's Gitea instance has Actions enabled with a runner.
+- Self-update (panel button) needs `SELF_UPDATE_REPO_URL` and only works when the manager runs in a
+  container; the swap is done by a helper container (`system/selfUpdateHelper.ts`), not by the
+  manager itself. Keep the helper standalone (no config/db imports). See `docs/operations.md`.

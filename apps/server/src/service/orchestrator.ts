@@ -20,11 +20,7 @@ import {
   removeImageIfUnused,
 } from "../docker/containers.js";
 import { generateBearerToken } from "../crypto/secrets.js";
-import { createSerialQueue } from "../util/serialQueue.js";
-
-// Builds are the heaviest thing the host does (nixpacks + docker build); running several at
-// once on a small host is what pushes it into swap. Serialize them.
-const enqueueBuild = createSerialQueue();
+import { enqueueBuild } from "./buildQueue.js";
 
 export interface DraftResult {
   installation: Installation;
