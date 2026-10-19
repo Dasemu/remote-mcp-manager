@@ -115,3 +115,18 @@ A short image name wasn't enough to remove an image via the Docker-compatible so
 Mounting only `apps/server` into a test container produced `node_modules not found` — the hoisted root `node_modules` wasn't mounted.
 
 **Avoid it:** mount the whole repo root when testing a workspace package, not just its subdirectory.
+
+## The manager itself needs hard limits — it shares the host with every MCP
+
+The manager ran with no timeouts, no concurrency cap, no heap ceiling and `MemoryStore` for
+sessions. When it started to grow (~1.1 GiB of RAM + swap) and Docker slowed under the
+pressure, every proxied request kept waiting on `docker inspect` and held its socket, ~70
+connections piled up on port 3000, the 3 GiB LXC swapped, and even `docker ps` hung — taking
+every MCP down with it. The root cause of the growth was not proven (a feedback loop of
+unbounded in-flight requests is the prime suspect); what was fixed is that nothing can grow
+unbounded any more. See `docs/operations.md`.
+
+**Avoid it:** any long-lived or per-request resource (sockets, sessions, queues, in-flight
+subprocesses) needs an explicit bound or timeout. Don't rely on a cgroup limit for the manager
+on the OpenRC LXC (see the cgroup lesson above) — enforce limits inside the process. Local Node
+24 cannot compile `better-sqlite3@11`, so run the test suite in a `node:20` container.

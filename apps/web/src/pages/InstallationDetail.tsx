@@ -91,6 +91,11 @@ export function InstallationDetail({ onLoggedOut }: { onLoggedOut: () => void })
   }
 
   const deployLocked = DEPLOY_LOCKED_STATUSES.has(installation.status);
+  const isRunning = installation.status === "running";
+  // Start also covers "built"/"error" with an image: with no container yet it falls back to a deploy.
+  const canStart =
+    installation.status === "stopped" ||
+    ((installation.status === "built" || installation.status === "error") && installation.imageTag !== null);
 
   return (
     <Shell title={installation.name} onLoggedOut={onLoggedOut}>
@@ -232,6 +237,54 @@ export function InstallationDetail({ onLoggedOut }: { onLoggedOut: () => void })
           <button
             type="button"
             className="btn"
+            title="Start the stopped container as it is. If it no longer exists, deploys it from the built image."
+            disabled={busy !== null || deployLocked || !canStart}
+            onClick={() =>
+              withBusy("start", async () => {
+                await api.start(installation.id);
+                await refresh();
+              })
+            }
+          >
+            {busy === "start" ? "Starting…" : "Start"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            title="Stop the container without removing it. It stays stopped until you start it again."
+            disabled={busy !== null || deployLocked || !isRunning}
+            onClick={() =>
+              withBusy("stop", async () => {
+                await api.stop(installation.id);
+                await refresh();
+              })
+            }
+          >
+            {busy === "stop" ? "Stopping…" : "Stop"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            title="Restart the running container in place. Does not apply changed environment variables; use Deploy for that."
+            disabled={busy !== null || deployLocked || !isRunning}
+            onClick={() =>
+              withBusy("restart", async () => {
+                await api.restart(installation.id);
+                await refresh();
+              })
+            }
+          >
+            {busy === "restart" ? "Restarting…" : "Restart"}
+          </button>
+        </div>
+        <p className="card-hint" style={{ margin: "8px 0 16px" }}>
+          Start, Stop and Restart act on the existing container: fast, and the image and its configuration stay as they are.
+        </p>
+        <div className="actions-row">
+          <button
+            type="button"
+            className="btn"
+            title="Re-clone the repository and build a new image with Nixpacks. Does not touch the running container."
             disabled={busy !== null}
             onClick={() =>
               withBusy("build", async () => {
@@ -245,6 +298,7 @@ export function InstallationDetail({ onLoggedOut }: { onLoggedOut: () => void })
           <button
             type="button"
             className="btn"
+            title="Create and start a new container from the built image, replacing any existing one. Applies changed environment variables."
             disabled={busy !== null || deployLocked}
             onClick={() =>
               withBusy("deploy", async () => {
@@ -258,6 +312,7 @@ export function InstallationDetail({ onLoggedOut }: { onLoggedOut: () => void })
           <button
             type="button"
             className="btn"
+            title="Deploy again from the current image, without rebuilding. Applies changed environment variables."
             disabled={busy !== null}
             onClick={() =>
               withBusy("redeploy", async () => {
@@ -271,6 +326,7 @@ export function InstallationDetail({ onLoggedOut }: { onLoggedOut: () => void })
           <button
             type="button"
             className="btn"
+            title="Build, then Deploy: picks up new commits from the repository. If the build fails, nothing is redeployed."
             disabled={busy !== null}
             onClick={() =>
               withBusy("rebuild", async () => {
@@ -296,6 +352,10 @@ export function InstallationDetail({ onLoggedOut }: { onLoggedOut: () => void })
             {busy === "delete" ? "Deleting…" : "Delete"}
           </button>
         </div>
+        <p className="card-hint" style={{ marginTop: 8 }}>
+          Build makes a new image from the repository. Deploy runs that image in a fresh container (Redeploy does the same
+          again). Rebuild &amp; redeploy does both, to pick up new commits.
+        </p>
       </div>
 
       <div className="card section-gap">

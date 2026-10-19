@@ -3,8 +3,17 @@ import type { Request, Response } from "express";
 import httpProxy from "http-proxy";
 import { getInstallationBySlug, type Installation } from "../db/installations.js";
 import { getContainerIp } from "../docker/containers.js";
+import { config } from "../config/env.js";
 
-const proxy = httpProxy.createProxyServer();
+// proxyTimeout: inactivity timeout on the upstream socket; timeout: same on the client socket.
+// Without them a stalled MCP container (or a client that vanished mid-stream) holds its
+// sockets and buffers forever, and those pile up until the host runs out of memory.
+const proxy = httpProxy.createProxyServer({ proxyTimeout: config.proxyTimeoutMs, timeout: config.proxyTimeoutMs });
+let activeProxyRequests = 0;
+
+export function getActiveProxyRequests(): number {
+  return activeProxyRequests;
+}
 proxy.on("error", (err, _req, res) => {
   if (!(res as Response).headersSent) {
     (res as Response).status(502).json({ error: "proxy error", detail: err.message });
@@ -50,6 +59,16 @@ export async function handleMcpProxyRequest(req: Request, res: Response): Promis
     res.status(401).json({ error: "unauthorized" });
     return;
   }
+
+  // Bounded concurrency: when upstreams or Docker stall, shed load rather than queue unboundedly.
+  if (activeProxyRequests >= config.maxProxyRequests) {
+    res.set("Retry-After", "5").status(503).json({ error: "too many concurrent requests" });
+    return;
+  }
+  activeProxyRequests += 1;
+  res.once("close", () => {
+    activeProxyRequests -= 1;
+  });
 
   let targetIp: string;
   try {

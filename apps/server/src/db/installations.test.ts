@@ -10,7 +10,8 @@ process.env.DATA_DIR = tmpDir;
 process.env.DB_PATH = path.join(tmpDir, "db.sqlite");
 process.env.MASTER_KEY = "test-master-key-at-least-32-characters-long";
 
-const { createInstallation, updateInstallation, getInstallationById, slugify } = await import("./installations.js");
+const { createInstallation, updateInstallation, getInstallationById, slugify, reconcileInterruptedInstallations } =
+  await import("./installations.js");
 
 describe("slugify", () => {
   it("normalizes names into a URL/container-safe slug", () => {
@@ -57,5 +58,20 @@ describe("installations repository", () => {
 
     expect(updated.env).toEqual({ FOO: "bar", API_KEY: "shh" });
     expect(getInstallationById(installation.id)?.env).toEqual({ FOO: "bar", API_KEY: "shh" });
+  });
+});
+
+describe("reconcileInterruptedInstallations", () => {
+  it("turns statuses that only a live process can advance into errors, and leaves the rest alone", () => {
+    const stuck = createInstallation({ name: "Stuck", slug: "stuck", repoUrl: "https://example.com/a.git" });
+    const fine = createInstallation({ name: "Fine", slug: "fine", repoUrl: "https://example.com/b.git" });
+    updateInstallation(stuck.id, { status: "starting" });
+    updateInstallation(fine.id, { status: "running" });
+
+    expect(reconcileInterruptedInstallations()).toBeGreaterThanOrEqual(1);
+
+    expect(getInstallationById(stuck.id)?.status).toBe("error");
+    expect(getInstallationById(stuck.id)?.statusDetail).toContain("interrupted");
+    expect(getInstallationById(fine.id)?.status).toBe("running");
   });
 });

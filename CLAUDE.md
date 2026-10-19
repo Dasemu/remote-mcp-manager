@@ -36,4 +36,7 @@ authenticated requests to it. See `README.md` for the full flow and `docs/` for 
 
 ## Gotchas
 - Builds run one at a time; no per-installation resource override (see README "Known limitations").
+- The manager enforces its own memory/socket limits (`docs/operations.md`); keep every new long-lived resource bounded.
+- Local Node 24 cannot compile `better-sqlite3@11`, so `npm test` fails on the host: run the suite in a
+  `node:20` container (`podman run ... docker.io/library/node:20-slim`, repo copied without `node_modules`).
 - `.gitea/workflows/ci.yml` only runs if this repo's Gitea instance has Actions enabled with a runner.

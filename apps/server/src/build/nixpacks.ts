@@ -2,10 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { config } from "../config/env.js";
+import { killGroupAfter } from "../util/processTimeout.js";
 
 export function buildLogPath(slug: string, buildId: string): string {
   return path.join(config.logsDir, slug, `${buildId}.log`);
 }
+
+// A hung build would hold the (serialized) build queue forever.
+const BUILD_TIMEOUT_MS = 30 * 60 * 1000;
 
 export interface BuildResult {
   success: boolean;
@@ -83,7 +87,8 @@ export function runNixpacksBuild(
       logStream.write(`[remote-mcp-manager] pinning NIXPACKS_NODE_VERSION=${nodeVersion}\n`);
     }
 
-    const child = spawn("nixpacks", args);
+    const child = spawn("nixpacks", args, { detached: true });
+    killGroupAfter(child, BUILD_TIMEOUT_MS);
     child.stdout.pipe(logStream, { end: false });
     child.stderr.pipe(logStream, { end: false });
 

@@ -229,6 +229,20 @@ export function updateInstallation(id: string, patch: InstallationUpdate): Insta
   return getInstallationById(id)!;
 }
 
+/**
+ * Statuses that only make sense while this process is working on the installation. After a
+ * restart (including the memory guard's deliberate one) nothing is working on them any more, so
+ * they would otherwise stay stuck forever, locking the UI buttons and gating the proxy.
+ */
+export function reconcileInterruptedInstallations(): number {
+  return db
+    .prepare(
+      `UPDATE installations SET status = 'error', status_detail = ?, updated_at = ?
+       WHERE status IN ('cloning', 'building', 'starting')`,
+    )
+    .run("interrupted by a manager restart — use Start or Redeploy to recover", new Date().toISOString()).changes;
+}
+
 export function deleteInstallation(id: string): void {
   db.prepare("DELETE FROM installations WHERE id = ?").run(id);
 }

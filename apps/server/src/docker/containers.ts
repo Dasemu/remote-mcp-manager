@@ -2,6 +2,8 @@ import net from "node:net";
 import Docker from "dockerode";
 import { config } from "../config/env.js";
 import type { Installation } from "../db/installations.js";
+import { withTimeout } from "../util/withTimeout.js";
+import { isNotFoundError, isNotModifiedError } from "./errors.js";
 
 const docker = new Docker({ socketPath: config.dockerSocketPath });
 
@@ -12,7 +14,17 @@ export async function ensureNetwork(name: string): Promise<void> {
   }
 }
 
+// Every proxied MCP request needs the container's IP. Asking Docker each time meant a slow
+// daemon stalled every request at once (and each one held its socket while waiting); a short
+// cache plus a call timeout keeps one wedged Docker daemon from snowballing into the proxy.
+const IP_CACHE_TTL_MS = 5_000;
+const DOCKER_CALL_TIMEOUT_MS = 10_000;
+// stop/restart send SIGTERM and wait the daemon's grace period (10s) before SIGKILL.
+const DOCKER_STOP_TIMEOUT_MS = 30_000;
+const ipCache = new Map<string, { ip: Promise<string>; expires: number }>();
+
 export async function removeContainerIfExists(containerName: string): Promise<void> {
+  ipCache.delete(containerName);
   try {
     await docker.getContainer(containerName).remove({ force: true });
   } catch {
@@ -25,6 +37,7 @@ export async function runInstallationContainer(installation: Installation): Prom
 
   await ensureNetwork(config.mcpNetworkName);
   await removeContainerIfExists(installation.containerName);
+  ipCache.delete(installation.containerName);
 
   const env = {
     ...installation.env,
@@ -69,7 +82,7 @@ export async function runInstallationContainer(installation: Installation): Prom
 
 export async function getImageId(imageTag: string): Promise<string | undefined> {
   try {
-    const info = await docker.getImage(imageTag).inspect();
+    const info = await withTimeout(docker.getImage(imageTag).inspect(), DOCKER_CALL_TIMEOUT_MS, `docker inspect ${imageTag}`);
     return info.Id;
   } catch {
     return undefined;
@@ -79,7 +92,7 @@ export async function getImageId(imageTag: string): Promise<string | undefined> 
 /** Best-effort removal: leaves the image alone if it's still referenced (e.g. by a running container). */
 export async function removeImageIfUnused(imageId: string): Promise<void> {
   try {
-    await docker.getImage(imageId).remove({ force: false });
+    await withTimeout(docker.getImage(imageId).remove({ force: false }), DOCKER_CALL_TIMEOUT_MS, "docker image rm");
   } catch {
     // still in use or already gone — nothing to do
   }
@@ -89,14 +102,63 @@ export async function stopInstallationContainer(containerName: string): Promise<
   await removeContainerIfExists(containerName);
 }
 
-export async function getContainerIp(containerName: string): Promise<string> {
-  const container = docker.getContainer(containerName);
-  const info = await container.inspect();
+// Lifecycle actions on the EXISTING container (no remove/recreate, so the image and the
+// config it was created with stay untouched). Resolves false when the container no longer
+// exists, so the caller can fall back to a full deploy. The container's IP can change across a
+// stop/start, hence the cache is dropped before and after.
+async function actOnExistingContainer(
+  containerName: string,
+  what: string,
+  timeoutMs: number,
+  action: (container: Docker.Container) => Promise<unknown>,
+): Promise<boolean> {
+  ipCache.delete(containerName);
+  try {
+    await withTimeout(action(docker.getContainer(containerName)), timeoutMs, `docker ${what} ${containerName}`);
+    return true;
+  } catch (err) {
+    if (isNotFoundError(err)) return false;
+    // start on a running container / stop on a stopped one: already where we want it.
+    if (isNotModifiedError(err)) return true;
+    throw err;
+  } finally {
+    ipCache.delete(containerName);
+  }
+}
+
+export const stopContainer = (containerName: string) =>
+  actOnExistingContainer(containerName, "stop", DOCKER_STOP_TIMEOUT_MS, (c) => c.stop());
+
+export const startContainer = (containerName: string) =>
+  actOnExistingContainer(containerName, "start", DOCKER_CALL_TIMEOUT_MS, (c) => c.start());
+
+export const restartContainer = (containerName: string) =>
+  actOnExistingContainer(containerName, "restart", DOCKER_STOP_TIMEOUT_MS, (c) => c.restart());
+
+async function lookupContainerIp(containerName: string): Promise<string> {
+  const info = await withTimeout(
+    docker.getContainer(containerName).inspect(),
+    DOCKER_CALL_TIMEOUT_MS,
+    `docker inspect ${containerName}`,
+  );
   const network = info.NetworkSettings.Networks[config.mcpNetworkName];
   if (!network?.IPAddress) {
     throw new Error(`Container ${containerName} has no IP on network ${config.mcpNetworkName}`);
   }
   return network.IPAddress;
+}
+
+export function getContainerIp(containerName: string): Promise<string> {
+  const cached = ipCache.get(containerName);
+  if (cached && cached.expires > Date.now()) return cached.ip;
+
+  // Concurrent callers share one in-flight lookup; failures aren't cached.
+  const ip = lookupContainerIp(containerName);
+  ipCache.set(containerName, { ip, expires: Date.now() + IP_CACHE_TTL_MS });
+  ip.catch(() => {
+    if (ipCache.get(containerName)?.ip === ip) ipCache.delete(containerName);
+  });
+  return ip;
 }
 
 export async function waitForContainerHealth(

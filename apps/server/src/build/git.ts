@@ -2,10 +2,15 @@ import fs from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { config } from "../config/env.js";
+import { killGroupAfter } from "../util/processTimeout.js";
+
+// A clone that never finishes (e.g. ssh waiting on a prompt) would otherwise hang forever.
+const GIT_TIMEOUT_MS = 5 * 60 * 1000;
 
 function run(cmd: string, args: string[], cwd?: string): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd });
+    const child = spawn(cmd, args, { cwd, detached: true });
+    killGroupAfter(child, GIT_TIMEOUT_MS);
     let output = "";
     child.stdout.on("data", (d) => (output += d.toString()));
     child.stderr.on("data", (d) => (output += d.toString()));

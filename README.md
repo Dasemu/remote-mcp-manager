@@ -51,7 +51,7 @@ a runner.
 - Every installed container gets the same memory/CPU caps (`CONTAINER_MEMORY_MB`,
   `CONTAINER_CPUS`), no per-installation override yet.
 - No multi-user support — single operator only.
-- Builds run one at a time.
+- Builds run one at a time (queued in the manager; a build is killed after 30 minutes).
 
 See `LESSONS.md` for operational gotchas found while building and running this (Nixpacks
 runtime-version mismatches, Podman networking, SELinux, etc.).
