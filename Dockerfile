@@ -41,5 +41,8 @@ COPY --from=build /repo/apps/web/dist apps/web/dist
 
 WORKDIR /repo/apps/server
 ENV NODE_ENV=production
+# Hard V8 heap ceiling, above MANAGER_MEMORY_LIMIT_MB (the soft limit the app enforces itself):
+# a leak ends in a crash + restart by the compose restart policy instead of swapping the host.
+ENV NODE_OPTIONS=--max-old-space-size=768
 EXPOSE 3000
 CMD ["node", "dist/index.js"]
