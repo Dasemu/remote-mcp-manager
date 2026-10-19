@@ -10,6 +10,8 @@ const CHECK_DIR = "_manager-check";
 const OK_TTL_MS = 10 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
 const MAX_LISTED = 20;
+// The panel waits on this, so it gets far less than the 5 min installs allow for a clone.
+const GIT_CHECK_TIMEOUT_MS = 60 * 1000;
 
 export interface RemoteStatus {
   checkedAt: string;
@@ -22,9 +24,10 @@ export interface RemoteStatus {
 
 let cached: { status: RemoteStatus; expires: number; forSha: string | undefined } | null = null;
 let inFlight: Promise<RemoteStatus> | null = null;
+let queuedForce: Promise<RemoteStatus> | null = null;
 
 async function git(cwd: string, args: string[]) {
-  return run("git", args, cwd).catch((err: Error) => ({ code: 1, output: err.message }));
+  return run("git", args, cwd, GIT_CHECK_TIMEOUT_MS).catch((err: Error) => ({ code: 1, output: err.message }));
 }
 
 async function compute(installedSha: string | undefined): Promise<RemoteStatus> {
@@ -40,12 +43,14 @@ async function compute(installedSha: string | undefined): Promise<RemoteStatus> 
   }
 
   // Blobless fetch where the server supports it; plain fetch otherwise.
-  const fetchArgs = ["fetch", "--quiet", "--no-tags", url, config.selfUpdateRef];
-  let fetched = await git(dir, [fetchArgs[0]!, "--filter=blob:none", ...fetchArgs.slice(1)]);
-  if (fetched.code !== 0) fetched = await git(dir, fetchArgs);
+  const fetchTail = ["--quiet", "--no-tags", "--", url, config.selfUpdateRef];
+  let fetched = await git(dir, ["fetch", "--filter=blob:none", ...fetchTail]);
+  // Only a server that doesn't do partial clones warrants the retry; an unreachable one would
+  // just make the panel wait twice as long.
+  if (fetched.code !== 0 && /filter/i.test(fetched.output)) fetched = await git(dir, ["fetch", ...fetchTail]);
   if (fetched.code !== 0) return { ...base, error: `git fetch failed: ${fetched.output.trim().slice(-300)}` };
 
-  const head = await git(dir, ["rev-parse", "FETCH_HEAD"]);
+  const head = await git(dir, ["rev-parse", "--verify", "FETCH_HEAD^{commit}"]);
   const remoteSha = head.output.trim();
   if (head.code !== 0 || !remoteSha) return { ...base, error: "could not read the fetched head" };
   if (!installedSha) return { ...base, remoteSha };
@@ -58,22 +63,15 @@ async function compute(installedSha: string | undefined): Promise<RemoteStatus> 
 
   const range = `${installedSha}..${remoteSha}`;
   const count = await git(dir, ["rev-list", "--count", range]);
-  const log = await git(dir, ["log", `-n${MAX_LISTED}`, "--format=%h%x09%s", range]);
   const behind = Number.parseInt(count.output.trim(), 10);
-  return {
-    ...base,
-    remoteSha,
-    behind: Number.isNaN(behind) ? null : behind,
-    commits: parseCommitLog(log.output),
-  };
+  if (count.code !== 0 || Number.isNaN(behind)) {
+    return { ...base, remoteSha, error: `git rev-list failed: ${count.output.trim().slice(-200)}` };
+  }
+  const log = await git(dir, ["log", `-n${MAX_LISTED}`, "--format=%h%x09%s", range]);
+  return { ...base, remoteSha, behind, commits: log.code === 0 ? parseCommitLog(log.output) : [] };
 }
 
-/** Cached for a few minutes; concurrent callers share one fetch. `force` skips the cache. */
-export function checkRemote(installedSha: string | undefined, force = false): Promise<RemoteStatus> {
-  if (!force && cached && cached.expires > Date.now() && cached.forSha === installedSha) {
-    return Promise.resolve(cached.status);
-  }
-  if (inFlight) return inFlight;
+function start(installedSha: string | undefined): Promise<RemoteStatus> {
   inFlight = compute(installedSha)
     .catch((err: Error): RemoteStatus => ({
       checkedAt: new Date().toISOString(),
@@ -90,6 +88,24 @@ export function checkRemote(installedSha: string | undefined, force = false): Pr
       inFlight = null;
     });
   return inFlight;
+}
+
+/**
+ * Cached for a few minutes; concurrent callers share one fetch. `force` skips the cache, and if a
+ * fetch is already running (it may have read the refs before a push) waits for it and runs a
+ * fresh one after it — at most one is ever queued.
+ */
+export function checkRemote(installedSha: string | undefined, force = false): Promise<RemoteStatus> {
+  if (!force && cached && cached.expires > Date.now() && cached.forSha === installedSha) {
+    return Promise.resolve(cached.status);
+  }
+  if (!inFlight) return start(installedSha);
+  if (!force) return inFlight;
+  queuedForce ??= inFlight.then(() => {
+    queuedForce = null;
+    return start(installedSha);
+  });
+  return queuedForce;
 }
 
 /** Last known result without triggering a fetch (null if none yet). */

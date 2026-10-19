@@ -7,10 +7,15 @@ import { killGroupAfter } from "../util/processTimeout.js";
 // A clone that never finishes (e.g. ssh waiting on a prompt) would otherwise hang forever.
 const GIT_TIMEOUT_MS = 5 * 60 * 1000;
 
-export function run(cmd: string, args: string[], cwd?: string): Promise<{ code: number; output: string }> {
+export function run(
+  cmd: string,
+  args: string[],
+  cwd?: string,
+  timeoutMs = GIT_TIMEOUT_MS,
+): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, detached: true });
-    killGroupAfter(child, GIT_TIMEOUT_MS);
+    killGroupAfter(child, timeoutMs);
     let output = "";
     child.stdout.on("data", (d) => (output += d.toString()));
     child.stderr.on("data", (d) => (output += d.toString()));

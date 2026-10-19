@@ -19,6 +19,7 @@ export function ManagerCard() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [gaveUp, setGaveUp] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [remoteGaveUp, setRemoteGaveUp] = useState(false);
 
   async function refresh() {
     try {
@@ -59,21 +60,24 @@ export function ManagerCard() {
   }, [requested, info, unreachable, startedAt]);
 
   const repoConfigured = info !== null && info.unavailableReason !== "SELF_UPDATE_REPO_URL is not set";
-  const waitingForRemote = repoConfigured && info !== null && info.remote === null && info.phase === "idle";
+  const waitingForRemote = repoConfigured && info !== null && info.remote === null && info.phase === "idle" && !remoteGaveUp;
 
   // The first remote check runs in the background on the server; poll briefly until it lands.
   useEffect(() => {
     if (!waitingForRemote) return;
     let tries = 0;
     const timer = setInterval(() => {
-      if (++tries > 10) clearInterval(timer);
-      else refresh();
+      if (++tries > 10) {
+        clearInterval(timer);
+        setRemoteGaveUp(true);
+      } else refresh();
     }, 3000);
     return () => clearInterval(timer);
   }, [waitingForRemote]);
 
   async function checkNow() {
     setChecking(true);
+    setRemoteGaveUp(false);
     setError(null);
     try {
       setInfo(await api.checkManager());
@@ -157,7 +161,9 @@ export function ManagerCard() {
 
 function RemoteLine({ info, checking }: { info: SystemInfo; checking: boolean }) {
   const remote = info.remote;
-  if (!remote) return <p className="status-detail">{checking ? "Checking the remote…" : ""}</p>;
+  if (!remote) {
+    return <p className="status-detail">{checking ? "Checking the remote…" : "Not checked yet; use Check for updates."}</p>;
+  }
   if (remote.error) return <p className="status-detail">Could not check the remote: {remote.error}</p>;
 
   const head = remote.remoteSha?.slice(0, 7);

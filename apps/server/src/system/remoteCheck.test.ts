@@ -16,11 +16,11 @@ function git(cwd: string, ...args: string[]) {
   }).trim();
 }
 
-async function load() {
+async function load(ref = "main") {
   vi.resetModules();
   vi.stubEnv("DATA_DIR", path.join(tmp, "data"));
   vi.stubEnv("SELF_UPDATE_REPO_URL", origin);
-  vi.stubEnv("SELF_UPDATE_REF", "main");
+  vi.stubEnv("SELF_UPDATE_REF", ref);
   return import("./remoteCheck.js");
 }
 
@@ -41,6 +41,23 @@ afterAll(() => {
 });
 
 describe("checkRemote", () => {
+  it("resolves an annotated tag to its commit", async () => {
+    git(origin, "tag", "-a", "v1", "-m", "release", shas[2]!);
+    const { checkRemote } = await load("v1");
+    const status = await checkRemote(shas[0], true);
+    expect(status.remoteSha).toBe(shas[2]);
+    expect(status.behind).toBe(2);
+  });
+
+  it("runs a fresh check after a forced refresh requested mid-flight", async () => {
+    const { checkRemote } = await load();
+    const first = checkRemote(shas[0]);
+    const forced = checkRemote(shas[0], true);
+    const [a, b] = await Promise.all([first, forced]);
+    expect(b.checkedAt >= a.checkedAt).toBe(true);
+    expect(b).not.toBe(a);
+  });
+
   it("counts the commits the installed sha is missing", async () => {
     const { checkRemote } = await load();
     const status = await checkRemote(shas[0], true);
