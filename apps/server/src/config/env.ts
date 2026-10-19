@@ -17,4 +17,12 @@ export const config = {
   // Per-container resource caps, applied to every installation (no per-installation override in V1).
   containerMemoryMb: Number(process.env.CONTAINER_MEMORY_MB ?? 512),
   containerCpus: Number(process.env.CONTAINER_CPUS ?? 1),
+  // Safeguards so one stuck upstream or a runaway heap can't take the whole host down.
+  // Inactivity timeout for proxied MCP requests/streams; a stalled upstream is cut after this.
+  proxyTimeoutMs: Number(process.env.PROXY_TIMEOUT_MS ?? 300_000),
+  // Max simultaneous proxied requests; beyond this the proxy answers 503 instead of piling up.
+  maxProxyRequests: Number(process.env.MAX_PROXY_REQUESTS ?? 100),
+  // The manager exits (and the container restart policy brings it back) once its own
+  // heap + external memory exceeds this. 0 disables the guard.
+  memoryLimitMb: Number(process.env.MANAGER_MEMORY_LIMIT_MB ?? 512),
 };

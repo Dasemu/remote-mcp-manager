@@ -2,11 +2,13 @@ import path from "node:path";
 import express from "express";
 import session from "express-session";
 import { config } from "./config/env.js";
-import "./db/index.js";
-import { handleMcpProxyRequest } from "./proxy/mcpProxy.js";
+import { db } from "./db/index.js";
+import { getActiveProxyRequests, handleMcpProxyRequest } from "./proxy/mcpProxy.js";
 import { authRouter } from "./api/auth.js";
 import { installationsRouter } from "./api/installations.js";
 import { requireAuth } from "./middleware/requireAuth.js";
+import { SqliteSessionStore } from "./session/sqliteStore.js";
+import { startMemoryGuard } from "./service/memoryGuard.js";
 
 if (!config.sessionSecret) {
   throw new Error("SESSION_SECRET env var must be set");
@@ -16,6 +18,7 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(
   session({
+    store: new SqliteSessionStore(db),
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -32,7 +35,16 @@ app.use(
   }),
 );
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    ok: true,
+    uptimeSec: Math.round(process.uptime()),
+    rssMb: Math.round(mem.rss / 1048576),
+    heapUsedMb: Math.round(mem.heapUsed / 1048576),
+    activeProxyRequests: getActiveProxyRequests(),
+  });
+});
 
 // Bearer-token-gated MCP reverse proxy, public (auth handled per-installation).
 app.all("/mcp/:slug", handleMcpProxyRequest);
@@ -53,6 +65,27 @@ app.get(/^\/(?!api|mcp|health).*/, (_req, res) => {
   });
 });
 
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.log(`remote-mcp-manager listening on http://localhost:${config.port}`);
+});
+
+function shutdown(code: number): void {
+  server.close(() => process.exit(code));
+  server.closeAllConnections();
+  setTimeout(() => process.exit(code), 5_000).unref();
+}
+
+process.on("SIGTERM", () => shutdown(0));
+process.on("SIGINT", () => shutdown(0));
+
+// Exit before a leak drags the whole host into swap; the container's restart policy
+// (`unless-stopped`) starts a fresh process.
+startMemoryGuard({
+  limitMb: config.memoryLimitMb,
+  onExceeded: (usedMb) => {
+    console.error(
+      `memory guard: heap+external at ${Math.round(usedMb)} MB exceeds MANAGER_MEMORY_LIMIT_MB=${config.memoryLimitMb}, restarting`,
+    );
+    shutdown(1);
+  },
 });

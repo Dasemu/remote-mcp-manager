@@ -17,6 +17,11 @@ import {
   removeImageIfUnused,
 } from "../docker/containers.js";
 import { generateBearerToken } from "../crypto/secrets.js";
+import { createSerialQueue } from "../util/serialQueue.js";
+
+// Builds are the heaviest thing the host does (nixpacks + docker build); running several at
+// once on a small host is what pushes it into swap. Serialize them.
+const enqueueBuild = createSerialQueue();
 
 export interface DraftResult {
   installation: Installation;
@@ -64,7 +69,11 @@ export function configureInstallation(
   return updateInstallation(id, patch);
 }
 
-export async function buildInstallation(id: string): Promise<Installation> {
+export function buildInstallation(id: string): Promise<Installation> {
+  return enqueueBuild(() => runBuild(id));
+}
+
+async function runBuild(id: string): Promise<Installation> {
   const installation = getInstallationById(id);
   if (!installation) throw new Error("installation not found");
 
@@ -127,7 +136,10 @@ export async function deployInstallation(id: string): Promise<Installation> {
 
 export async function redeployInstallation(id: string, opts: { rebuild?: boolean } = {}): Promise<Installation> {
   if (opts.rebuild) {
-    await buildInstallation(id);
+    // A failed build must stop here: deploying anyway would silently run the previous image
+    // and flip the status back to "running", hiding the failure.
+    const built = await buildInstallation(id);
+    if (built.status === "error") return built;
   }
   return deployInstallation(id);
 }

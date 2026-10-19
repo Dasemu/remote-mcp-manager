@@ -2,6 +2,7 @@ import net from "node:net";
 import Docker from "dockerode";
 import { config } from "../config/env.js";
 import type { Installation } from "../db/installations.js";
+import { withTimeout } from "../util/withTimeout.js";
 
 const docker = new Docker({ socketPath: config.dockerSocketPath });
 
@@ -12,7 +13,15 @@ export async function ensureNetwork(name: string): Promise<void> {
   }
 }
 
+// Every proxied MCP request needs the container's IP. Asking Docker each time meant a slow
+// daemon stalled every request at once (and each one held its socket while waiting); a short
+// cache plus a call timeout keeps one wedged Docker daemon from snowballing into the proxy.
+const IP_CACHE_TTL_MS = 5_000;
+const DOCKER_CALL_TIMEOUT_MS = 10_000;
+const ipCache = new Map<string, { ip: Promise<string>; expires: number }>();
+
 export async function removeContainerIfExists(containerName: string): Promise<void> {
+  ipCache.delete(containerName);
   try {
     await docker.getContainer(containerName).remove({ force: true });
   } catch {
@@ -25,6 +34,7 @@ export async function runInstallationContainer(installation: Installation): Prom
 
   await ensureNetwork(config.mcpNetworkName);
   await removeContainerIfExists(installation.containerName);
+  ipCache.delete(installation.containerName);
 
   const env = {
     ...installation.env,
@@ -89,14 +99,30 @@ export async function stopInstallationContainer(containerName: string): Promise<
   await removeContainerIfExists(containerName);
 }
 
-export async function getContainerIp(containerName: string): Promise<string> {
-  const container = docker.getContainer(containerName);
-  const info = await container.inspect();
+async function lookupContainerIp(containerName: string): Promise<string> {
+  const info = await withTimeout(
+    docker.getContainer(containerName).inspect(),
+    DOCKER_CALL_TIMEOUT_MS,
+    `docker inspect ${containerName}`,
+  );
   const network = info.NetworkSettings.Networks[config.mcpNetworkName];
   if (!network?.IPAddress) {
     throw new Error(`Container ${containerName} has no IP on network ${config.mcpNetworkName}`);
   }
   return network.IPAddress;
+}
+
+export function getContainerIp(containerName: string): Promise<string> {
+  const cached = ipCache.get(containerName);
+  if (cached && cached.expires > Date.now()) return cached.ip;
+
+  // Concurrent callers share one in-flight lookup; failures aren't cached.
+  const ip = lookupContainerIp(containerName);
+  ipCache.set(containerName, { ip, expires: Date.now() + IP_CACHE_TTL_MS });
+  ip.catch(() => {
+    if (ipCache.get(containerName)?.ip === ip) ipCache.delete(containerName);
+  });
+  return ip;
 }
 
 export async function waitForContainerHealth(
